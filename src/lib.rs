@@ -5,3 +5,6 @@ pub mod parser;
 pub mod runner;
 pub mod span;
 pub mod syntax;
+pub mod lambda_lift;
+pub mod checker;
+pub mod sequentializer;
