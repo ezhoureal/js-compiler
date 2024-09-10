@@ -1,0 +1,8 @@
+let x = 5 in
+def loop(i,acc):
+  if i == 0:
+    acc
+  else:
+    loop(i - 1, acc + x)
+in
+loop(x,0)

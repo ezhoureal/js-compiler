@@ -1,0 +1,3 @@
+let x = 1 in
+let y = print(x + 1) in
+print(y + 2)

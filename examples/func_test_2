@@ -1,0 +1,6 @@
+let x = 5 in
+def g(y):
+  y * x
+in
+let a = g(7) + 4 in
+g(a)

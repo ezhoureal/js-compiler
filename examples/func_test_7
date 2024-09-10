@@ -1,0 +1,19 @@
+def even(x):
+  def evn(n):
+    if n == 0:
+      true
+    else:
+      odd(n - 1)
+  and
+  def odd(n):
+    if n == 0:
+      false
+    else:
+      even(n - 1)
+  in
+  if x >= 0:
+    evn(x)
+  else:
+    evn(-1 * x)
+in
+even(24)

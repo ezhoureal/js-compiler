@@ -1,0 +1,10 @@
+let x = 3 in
+def f(a,b,c):
+  if b:
+    x * a
+  else:
+    c
+in
+let y = x * 2 in
+let z = print(y) in
+f(5, true, 13)

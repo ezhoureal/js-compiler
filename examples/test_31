@@ -1,0 +1,1 @@
+print(let x = 30 + 7, y = 100 + 6 in x * y)

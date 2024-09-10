@@ -1,0 +1,13 @@
+let x = 7 in
+def f(a,b,c):
+  if b:
+    x * a
+  else:
+    c
+in
+let y = x * 2 in
+let z = print(y) in
+let a = 5 in
+let b = true in
+let c = y in
+f(a, b, c)

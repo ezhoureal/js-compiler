@@ -1,0 +1,8 @@
+let x = 5 in
+def f(z):
+  z * x
+in
+def g(y):
+  f(y + 1)
+in
+g(7) + 4
