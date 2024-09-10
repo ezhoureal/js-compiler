@@ -3,7 +3,9 @@ use crate::asm::{Arg32, Arg64, BinArgs, Instr, MemRef, MovArgs, Reg, Reg32};
 use crate::checker;
 use crate::lambda_lift::lambda_lift;
 use crate::sequentializer;
-use crate::syntax::{Exp, FunDecl, ImmExp, Prim, SeqExp, SeqProg, SurfFunDecl, SurfProg, VarOrLabel};
+use crate::syntax::{
+    Exp, FunDecl, ImmExp, Prim, SeqExp, SeqProg, SurfFunDecl, SurfProg, VarOrLabel,
+};
 
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
@@ -40,7 +42,6 @@ pub enum CompileErr<Span> {
     },
 }
 
-
 pub fn check_prog<Span>(p: &SurfProg<Span>) -> Result<(), CompileErr<Span>>
 where
     Span: Clone,
@@ -64,12 +65,14 @@ fn imm_to_rax(imm: &ImmExp, vars: &HashMap<String, i32>) -> Vec<Instr> {
 
 static SNAKE_TRU: u64 = 0xFF_FF_FF_FF_FF_FF_FF_FF;
 static SNAKE_FLS: u64 = 0x7F_FF_FF_FF_FF_FF_FF_FF;
+static NEW_TYPE_MASK: u32 = 0b111;
 
 static OVERFLOW: &str = "overflow_error";
 static ARITH_ERROR: &str = "arith_error";
 static CMP_ERROR: &str = "cmp_error";
 static IF_ERROR: &str = "if_error";
 static LOGIC_ERROR: &str = "logic_error";
+static NON_ARRAY_ERROR: &str = "non_array_error";
 static SNAKE_ERROR: &str = "snake_error";
 
 fn imm_to_arg64(imm: &ImmExp, vars: &HashMap<String, i32>) -> Arg64 {
@@ -93,21 +96,21 @@ fn sub_for_cmp(exps: &Vec<ImmExp>, vars: &HashMap<String, i32>, reverse: bool) -
     let mut res = vec![];
     if reverse {
         // exps[1] - exps[0]
-        res.append(&mut vec![
+        res.extend(vec![
             Instr::Mov(MovArgs::ToReg(Reg::Rdx, imm_to_arg64(&exps[0], vars))),
             Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[1], vars))),
         ]);
     } else {
         // exps[0] - exps[1]
-        res.append(&mut vec![
+        res.extend(vec![
             Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[0], vars))),
             Instr::Mov(MovArgs::ToReg(Reg::Rdx, imm_to_arg64(&exps[1], vars))),
         ]);
     }
-    res.append(&mut cmp_check(Reg::Rax));
-    res.append(&mut cmp_check(Reg::Rdx));
+    res.extend(cmp_check(Reg::Rax));
+    res.extend(cmp_check(Reg::Rdx));
 
-    res.append(&mut vec![
+    res.extend(vec![
         Instr::Sar(BinArgs::ToReg(Reg::Rax, Arg32::Signed(1))),
         Instr::Sar(BinArgs::ToReg(Reg::Rdx, Arg32::Signed(1))),
         Instr::Sub(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))),
@@ -182,61 +185,72 @@ fn compile_to_instrs_inner<'a, 'b>(
     match e {
         SeqExp::Imm(exp, _) => imm_to_rax(exp, vars),
         SeqExp::Prim(p, exps, _) => {
-            let mut res = imm_to_rax(&exps[0], vars);
             //
             match p {
                 Prim::Add => {
-                    res.append(&mut arith_check(Reg::Rax));
+                    let mut res = imm_to_rax(&exps[0], vars);
+                    res.extend(arith_check(Reg::Rax));
                     res.push(Instr::Mov(MovArgs::ToReg(
                         Reg::Rdx,
                         imm_to_arg64(&exps[1], vars),
                     )));
-                    res.append(&mut arith_check(Reg::Rdx));
+                    res.extend(arith_check(Reg::Rdx));
                     res.push(Instr::Add(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
                     res.push(Instr::Jo(JmpArg::Label(OVERFLOW.to_string())));
+                    res
                 }
                 Prim::Sub => {
-                    res.append(&mut arith_check(Reg::Rax));
+                    let mut res = imm_to_rax(&exps[0], vars);
+                    res.extend(arith_check(Reg::Rax));
                     res.push(Instr::Mov(MovArgs::ToReg(
                         Reg::Rdx,
                         imm_to_arg64(&exps[1], vars),
                     )));
-                    res.append(&mut arith_check(Reg::Rdx));
+                    res.extend(arith_check(Reg::Rdx));
                     res.push(Instr::Sub(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
                     res.push(Instr::Jo(JmpArg::Label(OVERFLOW.to_string())));
+                    res
                 }
                 Prim::Mul => {
-                    res.append(&mut arith_check(Reg::Rax));
+                    let mut res = imm_to_rax(&exps[0], vars);
+                    res.extend(arith_check(Reg::Rax));
                     res.push(Instr::Mov(MovArgs::ToReg(
                         Reg::Rdx,
                         imm_to_arg64(&exps[1], vars),
                     )));
-                    res.append(&mut arith_check(Reg::Rdx));
+                    res.extend(arith_check(Reg::Rdx));
                     res.push(Instr::Sar(BinArgs::ToReg(Reg::Rdx, Arg32::Signed(1))));
                     res.push(Instr::IMul(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
                     res.push(Instr::Jo(JmpArg::Label(OVERFLOW.to_string())));
+                    res
                 }
                 Prim::Add1 => {
-                    res.append(&mut arith_check(Reg::Rax));
+                    let mut res = imm_to_rax(&exps[0], vars);
+                    res.extend(arith_check(Reg::Rax));
                     res.push(Instr::Add(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(0x2))));
                     res.push(Instr::Jo(JmpArg::Label(OVERFLOW.to_string())));
+                    res
                 }
                 Prim::Sub1 => {
-                    res.append(&mut arith_check(Reg::Rax));
+                    let mut res = imm_to_rax(&exps[0], vars);
+                    res.extend(arith_check(Reg::Rax));
                     res.push(Instr::Sub(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(0x2))));
                     res.push(Instr::Jo(JmpArg::Label(OVERFLOW.to_string())));
+                    res
                 }
                 Prim::Not => {
-                    res.append(&mut logic_check(Reg::Rax));
+                    let mut res = imm_to_rax(&exps[0], vars);
+                    res.extend(logic_check(Reg::Rax));
                     static BOOL_MASK: u64 = 0x80_00_00_00_00_00_00_00;
                     res.push(Instr::Mov(MovArgs::ToReg(
                         Reg::Rdx,
                         Arg64::Unsigned(BOOL_MASK),
                     )));
                     res.push(Instr::Xor(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
+                    res
                 }
                 Prim::Print => {
-                    res = vec![
+                    vec![
                         Instr::Mov(MovArgs::ToReg(Reg::Rdi, imm_to_arg64(&exps[0], vars))),
                         Instr::Sub(BinArgs::ToReg(
                             Reg::Rsp,
@@ -247,18 +261,26 @@ fn compile_to_instrs_inner<'a, 'b>(
                             Reg::Rsp,
                             Arg32::Signed(align_stack(stack) + 8),
                         )),
-                    ];
+                    ]
                 }
                 Prim::IsBool => {
-                    res.push(Instr::Mov(MovArgs::ToReg(
-                        Reg::Rdx,
-                        Arg64::Unsigned(SNAKE_FLS),
-                    )));
-                    res.push(Instr::And(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
-                    res.push(Instr::Shl(BinArgs::ToReg(Reg::Rax, Arg32::Signed(63))));
-                    res.push(Instr::Or(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
+                    *counter += 1;
+                    let fls_label = format!("false_{}", counter);
+                    let done_label = format!("cmp_done_{}", counter);
+                    vec![
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[0], vars))),
+                        Instr::And(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(0b1111))),
+                        Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(0b1111))),
+                        Instr::Jne(JmpArg::Label(fls_label.clone())),
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_TRU))),
+                        Instr::Jmp(JmpArg::Label(done_label.clone())),
+                        Instr::Label(fls_label),
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_FLS))),
+                        Instr::Label(done_label),
+                    ]
                 }
                 Prim::IsNum => {
+                    let mut res = imm_to_rax(&exps[0], vars);
                     res.push(Instr::Mov(MovArgs::ToReg(
                         Reg::Rdx,
                         Arg64::Unsigned(SNAKE_FLS),
@@ -266,42 +288,56 @@ fn compile_to_instrs_inner<'a, 'b>(
                     res.push(Instr::Xor(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
                     res.push(Instr::Shl(BinArgs::ToReg(Reg::Rax, Arg32::Signed(63))));
                     res.push(Instr::Or(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
+                    res
                 }
                 Prim::And => {
-                    res.append(&mut logic_check(Reg::Rax));
+                    let mut res = imm_to_rax(&exps[0], vars);
+                    res.extend(logic_check(Reg::Rax));
                     res.push(Instr::Mov(MovArgs::ToReg(
                         Reg::Rdx,
                         imm_to_arg64(&exps[1], vars),
                     )));
-                    res.append(&mut logic_check(Reg::Rdx));
+                    res.extend(logic_check(Reg::Rdx));
                     res.push(Instr::And(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
+                    res
                 }
                 Prim::Or => {
-                    res.append(&mut logic_check(Reg::Rax));
+                    let mut res = imm_to_rax(&exps[0], vars);
+                    res.extend(logic_check(Reg::Rax));
                     res.push(Instr::Mov(MovArgs::ToReg(
                         Reg::Rdx,
                         imm_to_arg64(&exps[1], vars),
                     )));
-                    res.append(&mut logic_check(Reg::Rdx));
+                    res.extend(logic_check(Reg::Rdx));
                     res.push(Instr::Or(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
+                    res
                 }
                 Prim::Lt => {
-                    res.append(&mut sub_for_cmp(exps, vars, false));
-                    res.append(&mut is_neg());
+                    let mut res = imm_to_rax(&exps[0], vars);
+                    res.extend(sub_for_cmp(exps, vars, false));
+                    res.extend(is_neg());
+                    res
                 }
                 Prim::Gt => {
-                    res.append(&mut sub_for_cmp(exps, vars, true));
-                    res.append(&mut is_neg());
+                    let mut res = imm_to_rax(&exps[0], vars);
+                    res.extend(sub_for_cmp(exps, vars, true));
+                    res.extend(is_neg());
+                    res
                 }
                 Prim::Le => {
-                    res.append(&mut sub_for_cmp(exps, vars, true));
-                    res.append(&mut is_non_neg());
+                    let mut res = imm_to_rax(&exps[0], vars);
+                    res.extend(sub_for_cmp(exps, vars, true));
+                    res.extend(is_non_neg());
+                    res
                 }
                 Prim::Ge => {
-                    res.append(&mut sub_for_cmp(exps, vars, false));
-                    res.append(&mut is_non_neg());
+                    let mut res = imm_to_rax(&exps[0], vars);
+                    res.extend(sub_for_cmp(exps, vars, false));
+                    res.extend(is_non_neg());
+                    res
                 }
                 Prim::Eq => {
+                    let mut res = imm_to_rax(&exps[0], vars);
                     res.push(Instr::Mov(MovArgs::ToReg(
                         Reg::Rdx,
                         imm_to_arg64(&exps[1], vars),
@@ -309,7 +345,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                     *counter += 1;
                     let fls_label = format!("false_{}", counter);
                     let done_label = format!("cmp_done_{}", counter);
-                    res.append(&mut vec![
+                    res.extend(vec![
                         Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))),
                         Instr::Jne(JmpArg::Label(fls_label.clone())),
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_TRU))),
@@ -318,8 +354,10 @@ fn compile_to_instrs_inner<'a, 'b>(
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_FLS))),
                         Instr::Label(done_label),
                     ]);
+                    res
                 }
                 Prim::Neq => {
+                    let mut res = imm_to_rax(&exps[0], vars);
                     res.push(Instr::Mov(MovArgs::ToReg(
                         Reg::Rdx,
                         imm_to_arg64(&exps[1], vars),
@@ -327,7 +365,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                     *counter += 1;
                     let fls_label = format!("false_{}", counter);
                     let done_label = format!("cmp_done_{}", counter);
-                    res.append(&mut vec![
+                    res.extend(vec![
                         Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))),
                         Instr::Je(JmpArg::Label(fls_label.clone())),
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_TRU))),
@@ -336,18 +374,99 @@ fn compile_to_instrs_inner<'a, 'b>(
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_FLS))),
                         Instr::Label(done_label),
                     ]);
+                    res
                 }
-                Prim::Length => todo!(),
+                Prim::Length => {
+                    vec![
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[0], vars))),
+                        Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
+                        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(NEW_TYPE_MASK))),
+                        Instr::Cmp(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(1))),
+                        Instr::Jne(JmpArg::Label(NON_ARRAY_ERROR.to_string())),
+                        
+                        Instr::Xor(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(1))),
+                        // check address valid
+                        Instr::Mov(MovArgs::ToReg(
+                            Reg::Rax,
+                            Arg64::Mem(MemRef {
+                                reg: Reg::Rax,
+                                offset: Offset::Constant(0),
+                            }),
+                        )),
+                    ]
+                }
                 Prim::IsFun => todo!(),
-                Prim::IsArray => todo!(),
+                Prim::IsArray => {
+                    *counter += 1;
+                    let fls_label = format!("false_{}", counter);
+                    let done_label = format!("cmp_done_{}", counter);
+                    vec![
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[0], vars))),
+                        Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
+                        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(NEW_TYPE_MASK))),
+                        Instr::Cmp(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(1))),
+                        Instr::Jne(JmpArg::Label(fls_label.clone())),
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_TRU))),
+                        Instr::Jmp(JmpArg::Label(done_label.clone())),
+                        Instr::Label(fls_label),
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_FLS))),
+                        Instr::Label(done_label),
+                    ]
+                }
                 Prim::GetCode => todo!(),
                 Prim::GetEnv => todo!(),
                 Prim::CheckArityAndUntag(_) => todo!(),
-                Prim::ArrayGet => todo!(),
+                Prim::ArrayGet => {
+                    vec![
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[0], vars))),
+                        Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
+                        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(NEW_TYPE_MASK))),
+                        Instr::Cmp(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(1))),
+                        Instr::Jne(JmpArg::Label(NON_ARRAY_ERROR.to_string())),
+                        Instr::Mov(MovArgs::ToReg(Reg::R8, imm_to_arg64(&exps[1], vars))),
+                        // check address valid
+                        Instr::Mov(MovArgs::ToReg(
+                            Reg::Rax,
+                            Arg64::Mem(MemRef {
+                                reg: Reg::Rax,
+                                offset: Offset::Computed {
+                                    reg: Reg::R8,
+                                    factor: 8,
+                                    constant: 8,
+                                },
+                            }),
+                        )),
+                    ]
+                }
                 Prim::ArraySet => todo!(),
-                Prim::MakeArray => todo!(),
+                Prim::MakeArray => {
+                    let len: u32 = exps.len().try_into().unwrap();
+                    let mut res = vec![Instr::Mov(MovArgs::ToMem(
+                        MemRef {
+                            reg: Reg::Rax,
+                            offset: Offset::Constant(0),
+                        },
+                        Reg32::Unsigned(len),
+                    ))];
+                    for (i, exp) in exps.iter().enumerate() {
+                        res.extend(vec![
+                            Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exp, vars))),
+                            Instr::Mov(MovArgs::ToMem(
+                                MemRef {
+                                    reg: Reg::R15,
+                                    offset: Offset::Constant((8 * (i + 1)).try_into().unwrap()),
+                                },
+                                Reg32::Reg(Reg::Rax),
+                            )),
+                        ]);
+                    }
+                    res.extend(vec![
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::R15))),
+                        Instr::Add(BinArgs::ToReg(Reg::R15, Arg32::Unsigned((len + 1) * 8))),
+                    ]);
+                    res
+                }
             }
-            res
         }
         SeqExp::Let {
             var,
@@ -366,7 +485,7 @@ fn compile_to_instrs_inner<'a, 'b>(
             )));
             vars.insert(var.clone(), offset);
 
-            res.append(&mut compile_to_instrs_inner(
+            res.extend(compile_to_instrs_inner(
                 &body,
                 counter,
                 stack + 1,
@@ -382,17 +501,17 @@ fn compile_to_instrs_inner<'a, 'b>(
             ann,
         } => {
             let mut res = imm_to_rax(cond, vars);
-            res.append(&mut if_check(Reg::Rax));
+            res.extend(if_check(Reg::Rax));
             *counter += 1;
             let els_label = format!("else_{}", counter);
             let done_label = format!("done_{}", counter);
-            res.append(&mut vec![
+            res.extend(vec![
                 Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Unsigned(SNAKE_FLS))),
                 Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))),
                 Instr::Je(JmpArg::Label(els_label.clone())),
             ]);
 
-            res.append(&mut compile_to_instrs_inner(
+            res.extend(compile_to_instrs_inner(
                 thn,
                 counter,
                 stack,
@@ -402,7 +521,7 @@ fn compile_to_instrs_inner<'a, 'b>(
             res.push(Instr::Jmp(JmpArg::Label(done_label.clone())));
 
             res.push(Instr::Label(els_label));
-            res.append(&mut compile_to_instrs_inner(
+            res.extend(compile_to_instrs_inner(
                 els, counter, stack, vars, functions,
             ));
             res.push(Instr::Label(done_label));
@@ -481,7 +600,12 @@ fn compile_to_instrs_inner<'a, 'b>(
             )));
             res
         }
-        SeqExp::MakeClosure { arity, label, env, ann } => todo!(),
+        SeqExp::MakeClosure {
+            arity,
+            label,
+            env,
+            ann,
+        } => todo!(),
         SeqExp::Semicolon { e1, e2, ann } => todo!(),
     }
 }
@@ -636,6 +760,8 @@ where
 
     let res = format!(
         "\
+        section .data
+        HEAP:    times 1024 dq 0
         section .text
         global start_here
         extern snake_error
@@ -643,7 +769,12 @@ where
 {}
 {}
 start_here:
-        call main
+        push r15            ; save the original value in r15
+        sub rsp, 8          ; padding to ensure the correct alignment
+        lea r15, [rel HEAP] ; load the address of the HEAP into r15 using rip-relative addressing
+        call main           ; call into the actual code for the main expression of the program
+        add rsp, 8          ; remove the padding
+        pop r15             ; restore the original to r15
         ret
 main:
 {}
@@ -655,4 +786,3 @@ main:
     println!("{}", res);
     Ok(res)
 }
-
