@@ -83,6 +83,22 @@ mk_test!(func_test_4, "func_test_4", "44");
 mk_test!(func_test_5, "func_test_5", "44");
 mk_test!(func_test_6, "func_test_6", "44");
 mk_test!(func_test_7, "func_test_7", "44");
+mk_test!(func_test_8, "func_test_8", "44");
+
+mk_test!(performance_1, "performance_1", "3628800");
+
+mk_test!(lambda_1, "lambda_1", "5");
+mk_test!(lambda_2, "lambda_2", "6");
+mk_test!(lambda_3, "lambda_3", "7");
+mk_test!(lambda_4, "lambda_4", "5");
+
+mk_test!(list_1, "list_1", "3");
+mk_test!(list_2, "list_2", "10");
+mk_test!(list_3, "list_3", "7");
+mk_test!(list_4, "list_4", "true");
+mk_test!(list_5, "list_5", "true");
+mk_test!(list_6, "list_6", "[4, [true, 3]]");
+mk_test!(list_7, "list_7", "[0, [0, 1]]");
 
 // IMPLEMENTATION
 fn test_example_file(f: &str, expected_str: &str) -> std::io::Result<()> {

@@ -54,13 +54,6 @@ fn eliminate_closures<Ann>(e: &Exp<Ann>) -> Exp<()> {
     panic!("NYI: uniquify")
 }
 
-// Identify which functions should be lifted to the top level
-fn should_lift<Ann>(p: &Exp<Ann>) -> HashSet<String> {
-    panic!("NYI: should lift")
-}
-
-
-
 // returns instruction to move imm to Rax
 fn imm_to_rax(imm: &ImmExp, vars: &HashMap<String, i32>) -> Vec<Instr> {
     vec![Instr::Mov(MovArgs::ToReg(

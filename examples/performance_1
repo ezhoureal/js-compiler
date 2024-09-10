@@ -1,0 +1,10 @@
+def fac(x):
+  def loop(x, acc):
+    if x == 0:
+      acc
+    else:
+      loop(x - 1, acc * x)
+  in
+  loop(x, 1)
+in
+fac(10)

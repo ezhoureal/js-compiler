@@ -1,0 +1,8 @@
+let x1 = 1,
+    x2 = 2,
+    x3 = 3 in
+def f(x,y): 4
+and
+def g(a,b,c): 5
+in
+print(g(1, 2, 3))
