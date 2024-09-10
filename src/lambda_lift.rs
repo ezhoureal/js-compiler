@@ -81,17 +81,23 @@ fn uniquify<Span>(e: &Exp<Span>, mapping: &HashMap<String, String>, counter: &mu
             ann: (),
         },
         Exp::Call(func, params, _) => {
-            let uniq_params = params
-                .iter()
-                .map(|s| uniquify(s, mapping, counter))
-                .collect();
-            Exp::Call(mapping[func].clone(), uniq_params, ())
+            todo!()
+            // let uniq_params = params
+            //     .iter()
+            //     .map(|s| uniquify(s, mapping, counter))
+            //     .collect();
+            // Exp::Call(mapping[func].clone(), uniq_params, ())
         }
         Exp::InternalTailCall(_, _, _) => todo!(),
         Exp::ExternalCall {
             args: _,
             is_tail,
             ann: _, fun } => todo!(),
+                    Exp::Semicolon { e1, e2, ann } => todo!(),
+                    Exp::Lambda { parameters, body, ann } => todo!(),
+                    Exp::MakeClosure { arity, label, env, ann } => todo!(),
+                    Exp::ClosureCall(_, _, _) => todo!(),
+                    Exp::DirectCall(_, _, _) => todo!(),
     }
 }
 
@@ -145,25 +151,26 @@ fn rewrite_call_params(
             ann: (),
         },
         Exp::Call(func, params, _) => {
-            let mut mod_params: Vec<_> = params
-                .iter()
-                .map(|param| rewrite_call_params(param, globals, false))
-                .collect();
-            if !globals.contains_key(func) {
-                assert!(is_tail);
-                return Exp::InternalTailCall(func.clone(), mod_params, ());
-            }
+            todo!()
+            // let mut mod_params: Vec<_> = params
+            //     .iter()
+            //     .map(|param| rewrite_call_params(param, globals, false))
+            //     .collect();
+            // if !globals.contains_key(func) {
+            //     assert!(is_tail);
+            //     return Exp::InternalTailCall(func.clone(), mod_params, ());
+            // }
 
-            println!("return external call from call, isTail = {}", is_tail);
-            for p in globals[func].parameters.iter().skip(params.len()) {
-                mod_params.push(Exp::Var(p.clone(), ()))
-            }
-            Exp::ExternalCall {
-                fun_name: func.to_string(),
-                args: mod_params,
-                is_tail: is_tail,
-                ann: (),
-            }
+            // println!("return external call from call, isTail = {}", is_tail);
+            // for p in globals[func].parameters.iter().skip(params.len()) {
+            //     mod_params.push(Exp::Var(p.clone(), ()))
+            // }
+            // Exp::ExternalCall {
+            //     fun_name: func.to_string(),
+            //     args: mod_params,
+            //     is_tail: is_tail,
+            //     ann: (),
+            // }
         }
         _ => e.clone(),
     }
@@ -301,11 +308,9 @@ fn should_lift(p: &Exp<()>, funcs: &HashSet<String>, is_tail: bool) -> HashSet<S
         }
         Exp::InternalTailCall(_, _, _) => todo!(),
         Exp::ExternalCall {
-            fun_name,
             args,
             is_tail,
-            ann,
-        } => todo!(),
+            ann, fun } => todo!(),
         _ => {}
     }
     set

@@ -97,34 +97,35 @@ where
             check_prog(body, &scoped_symbols)
         }
         Exp::Call(func, params, ann) => {
-            if !symbols.contains_key(func) {
-                return Err(CompileErr::UndefinedFunction {
-                    undefined: func.clone(),
-                    location: ann.clone(),
-                });
-            }
-            match &symbols[func] {
-                Symbol::Func(param_size) => {
-                    if params.len() != *param_size {
-                        return Err(CompileErr::FunctionCalledWrongArity {
-                            function_name: func.clone(),
-                            correct_arity: *param_size,
-                            arity_used: params.len(),
-                            location: ann.clone(),
-                        });
-                    }
-                }
-                Symbol::Var => {
-                    return Err(CompileErr::ValueUsedAsFunction {
-                        variable_name: func.clone(),
-                        location: ann.clone(),
-                    });
-                }
-            }
-            for p in params {
-                check_prog(p, &symbols)?;
-            }
-            Ok(())
+            todo!()
+            // if !symbols.contains_key(func) {
+            //     return Err(CompileErr::UndefinedFunction {
+            //         undefined: func.clone(),
+            //         location: ann.clone(),
+            //     });
+            // }
+            // match &symbols[func] {
+            //     Symbol::Func(param_size) => {
+            //         if params.len() != *param_size {
+            //             return Err(CompileErr::FunctionCalledWrongArity {
+            //                 function_name: func.clone(),
+            //                 correct_arity: *param_size,
+            //                 arity_used: params.len(),
+            //                 location: ann.clone(),
+            //             });
+            //         }
+            //     }
+            //     Symbol::Var => {
+            //         return Err(CompileErr::ValueUsedAsFunction {
+            //             variable_name: func.clone(),
+            //             location: ann.clone(),
+            //         });
+            //     }
+            // }
+            // for p in params {
+            //     check_prog(p, &symbols)?;
+            // }
+            // Ok(())
         }
         Exp::InternalTailCall(_, _, _) => todo!(),
         Exp::ExternalCall {
@@ -133,5 +134,10 @@ where
             ann,
             fun,
         } => todo!(),
+        Exp::Semicolon { e1, e2, ann } => todo!(),
+        Exp::Lambda { parameters, body, ann } => todo!(),
+        Exp::MakeClosure { arity, label, env, ann } => todo!(),
+        Exp::ClosureCall(_, _, _) => todo!(),
+        Exp::DirectCall(_, _, _) => todo!(),
     }
 }

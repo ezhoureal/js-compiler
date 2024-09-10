@@ -1,9 +1,9 @@
-use crate::asm::instrs_to_string;
-use crate::asm::{Arg32, Arg64, BinArgs, Instr, Loc, MemRef, MovArgs, Reg, Reg32};
+use crate::asm::{instrs_to_string, JmpArg, Offset};
+use crate::asm::{Arg32, Arg64, BinArgs, Instr, MemRef, MovArgs, Reg, Reg32};
 use crate::checker;
 use crate::lambda_lift::lambda_lift;
 use crate::sequentializer;
-use crate::syntax::{Exp, FunDecl, ImmExp, Prim, SeqExp, SeqProg, SurfFunDecl, SurfProg};
+use crate::syntax::{Exp, FunDecl, ImmExp, Prim, SeqExp, SeqProg, SurfFunDecl, SurfProg, VarOrLabel};
 
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
@@ -84,7 +84,7 @@ fn imm_to_arg64(imm: &ImmExp, vars: &HashMap<String, i32>) -> Arg64 {
         ImmExp::Num(i) => Arg64::Signed(*i << 1),
         ImmExp::Var(s) => Arg64::Mem(MemRef {
             reg: Reg::Rsp,
-            offset: vars[s],
+            offset: Offset::Constant(vars[s]),
         }),
         ImmExp::Bool(b) => {
             if *b {
@@ -146,7 +146,7 @@ fn arith_check(reg: Reg) -> Vec<Instr> {
         Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Reg(reg))),
         Instr::And(BinArgs::ToReg(Reg::Rcx, Arg32::Signed(1))),
         Instr::Cmp(BinArgs::ToReg(Reg::Rcx, Arg32::Signed(1))),
-        Instr::Je(ARITH_ERROR.to_string()),
+        Instr::Je(JmpArg::Label(ARITH_ERROR.to_string())),
     ]
 }
 
@@ -155,7 +155,7 @@ fn cmp_check(reg: Reg) -> Vec<Instr> {
         Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Reg(reg))),
         Instr::And(BinArgs::ToReg(Reg::Rcx, Arg32::Signed(1))),
         Instr::Cmp(BinArgs::ToReg(Reg::Rcx, Arg32::Signed(1))),
-        Instr::Je(CMP_ERROR.to_string()),
+        Instr::Je(JmpArg::Label(CMP_ERROR.to_string())),
     ]
 }
 
@@ -164,7 +164,7 @@ fn logic_check(reg: Reg) -> Vec<Instr> {
         Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Reg(reg))),
         Instr::And(BinArgs::ToReg(Reg::Rcx, Arg32::Signed(1))),
         Instr::Cmp(BinArgs::ToReg(Reg::Rcx, Arg32::Signed(0))),
-        Instr::Je(LOGIC_ERROR.to_string()),
+        Instr::Je(JmpArg::Label(LOGIC_ERROR.to_string())),
     ]
 }
 
@@ -173,7 +173,7 @@ fn if_check(reg: Reg) -> Vec<Instr> {
         Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Reg(reg))),
         Instr::And(BinArgs::ToReg(Reg::Rcx, Arg32::Signed(1))),
         Instr::Cmp(BinArgs::ToReg(Reg::Rcx, Arg32::Signed(0))),
-        Instr::Je(IF_ERROR.to_string()),
+        Instr::Je(JmpArg::Label(IF_ERROR.to_string())),
     ]
 }
 
@@ -200,7 +200,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                     )));
                     res.append(&mut arith_check(Reg::Rdx));
                     res.push(Instr::Add(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
-                    res.push(Instr::Jo(OVERFLOW.to_string()));
+                    res.push(Instr::Jo(JmpArg::Label(OVERFLOW.to_string())));
                 }
                 Prim::Sub => {
                     res.append(&mut arith_check(Reg::Rax));
@@ -210,7 +210,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                     )));
                     res.append(&mut arith_check(Reg::Rdx));
                     res.push(Instr::Sub(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
-                    res.push(Instr::Jo(OVERFLOW.to_string()));
+                    res.push(Instr::Jo(JmpArg::Label(OVERFLOW.to_string())));
                 }
                 Prim::Mul => {
                     res.append(&mut arith_check(Reg::Rax));
@@ -221,17 +221,17 @@ fn compile_to_instrs_inner<'a, 'b>(
                     res.append(&mut arith_check(Reg::Rdx));
                     res.push(Instr::Sar(BinArgs::ToReg(Reg::Rdx, Arg32::Signed(1))));
                     res.push(Instr::IMul(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))));
-                    res.push(Instr::Jo(OVERFLOW.to_string()));
+                    res.push(Instr::Jo(JmpArg::Label(OVERFLOW.to_string())));
                 }
                 Prim::Add1 => {
                     res.append(&mut arith_check(Reg::Rax));
                     res.push(Instr::Add(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(0x2))));
-                    res.push(Instr::Jo(OVERFLOW.to_string()));
+                    res.push(Instr::Jo(JmpArg::Label(OVERFLOW.to_string())));
                 }
                 Prim::Sub1 => {
                     res.append(&mut arith_check(Reg::Rax));
                     res.push(Instr::Sub(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(0x2))));
-                    res.push(Instr::Jo(OVERFLOW.to_string()));
+                    res.push(Instr::Jo(JmpArg::Label(OVERFLOW.to_string())));
                 }
                 Prim::Not => {
                     res.append(&mut logic_check(Reg::Rax));
@@ -249,7 +249,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                             Reg::Rsp,
                             Arg32::Signed(align_stack(stack) + 8),
                         )),
-                        Instr::Call("print_snake_val".to_string()),
+                        Instr::Call(JmpArg::Label("print_snake_val".to_string())),
                         Instr::Add(BinArgs::ToReg(
                             Reg::Rsp,
                             Arg32::Signed(align_stack(stack) + 8),
@@ -318,9 +318,9 @@ fn compile_to_instrs_inner<'a, 'b>(
                     let done_label = format!("cmp_done_{}", counter);
                     res.append(&mut vec![
                         Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))),
-                        Instr::Jne(fls_label.clone()),
+                        Instr::Jne(JmpArg::Label(fls_label.clone())),
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_TRU))),
-                        Instr::Jmp(done_label.clone()),
+                        Instr::Jmp(JmpArg::Label(done_label.clone())),
                         Instr::Label(fls_label),
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_FLS))),
                         Instr::Label(done_label),
@@ -336,14 +336,23 @@ fn compile_to_instrs_inner<'a, 'b>(
                     let done_label = format!("cmp_done_{}", counter);
                     res.append(&mut vec![
                         Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))),
-                        Instr::Je(fls_label.clone()),
+                        Instr::Je(JmpArg::Label(fls_label.clone())),
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_TRU))),
-                        Instr::Jmp(done_label.clone()),
+                        Instr::Jmp(JmpArg::Label(done_label.clone())),
                         Instr::Label(fls_label),
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_FLS))),
                         Instr::Label(done_label),
                     ]);
                 }
+                Prim::Length => todo!(),
+                Prim::IsFun => todo!(),
+                Prim::IsArray => todo!(),
+                Prim::GetCode => todo!(),
+                Prim::GetEnv => todo!(),
+                Prim::CheckArityAndUntag(_) => todo!(),
+                Prim::ArrayGet => todo!(),
+                Prim::ArraySet => todo!(),
+                Prim::MakeArray => todo!(),
             }
             res
         }
@@ -358,7 +367,7 @@ fn compile_to_instrs_inner<'a, 'b>(
             res.push(Instr::Mov(MovArgs::ToMem(
                 MemRef {
                     reg: Reg::Rsp,
-                    offset: offset,
+                    offset: Offset::Constant(offset),
                 },
                 Reg32::Reg(Reg::Rax),
             )));
@@ -387,7 +396,7 @@ fn compile_to_instrs_inner<'a, 'b>(
             res.append(&mut vec![
                 Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Unsigned(SNAKE_FLS))),
                 Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))),
-                Instr::Je(els_label.clone()),
+                Instr::Je(JmpArg::Label(els_label.clone())),
             ]);
 
             res.append(&mut compile_to_instrs_inner(
@@ -397,7 +406,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                 &mut vars.clone(),
                 functions,
             ));
-            res.push(Instr::Jmp(done_label.clone()));
+            res.push(Instr::Jmp(JmpArg::Label(done_label.clone())));
 
             res.push(Instr::Label(els_label));
             res.append(&mut compile_to_instrs_inner(
@@ -410,7 +419,7 @@ fn compile_to_instrs_inner<'a, 'b>(
             // locally defined functions
             *counter += 1;
             let body_label = format!("body_{}", counter);
-            let mut res = vec![Instr::Jmp(body_label.clone())];
+            let mut res = vec![Instr::Jmp(JmpArg::Label(body_label.clone()))];
             for decl in decls {
                 functions.insert(decl.name.clone(), stack);
                 push_params(stack, vars, &decl.parameters);
@@ -434,13 +443,17 @@ fn compile_to_instrs_inner<'a, 'b>(
             return compile_tail_call(func.clone(), args, stack, functions[func], vars);
         }
         SeqExp::ExternalCall {
-            fun_name,
             args,
             is_tail,
             ann,
+            fun,
         } => {
             if *is_tail {
-                return compile_tail_call(fun_name.clone(), args, stack, 0, vars);
+                if let VarOrLabel::Label(fun_str) = fun {
+                    return compile_tail_call(fun_str.clone(), args, stack, 0, vars);
+                } else {
+                    todo!()
+                }
             }
             let mut res = vec![];
             let stack_top = align_stack(stack);
@@ -454,7 +467,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                 res.push(Instr::Mov(MovArgs::ToMem(
                     MemRef {
                         reg: Reg::Rsp,
-                        offset: -(stack_top + offset),
+                        offset: Offset::Constant(-(stack_top + offset)),
                     },
                     Reg32::Reg(Reg::Rax),
                 )));
@@ -464,13 +477,19 @@ fn compile_to_instrs_inner<'a, 'b>(
                 Reg::Rsp,
                 Arg32::Signed(stack_top),
             )));
-            res.push(Instr::Call(format!("func_{}", fun_name)));
+            if let VarOrLabel::Label(fun_str) = fun {
+                res.push(Instr::Call(JmpArg::Label(format!("func_{}", fun_str))));
+            } else {
+                todo!();
+            }
             res.push(Instr::Add(BinArgs::ToReg(
                 Reg::Rsp,
                 Arg32::Signed(stack_top),
             )));
             res
         }
+        SeqExp::MakeClosure { arity, label, env, ann } => todo!(),
+        SeqExp::Semicolon { e1, e2, ann } => todo!(),
     }
 }
 
@@ -501,7 +520,7 @@ fn compile_tail_call(
             res.push(Instr::Mov(MovArgs::ToMem(
                 MemRef {
                     reg: Reg::Rsp,
-                    offset: var_args[v],
+                    offset: Offset::Constant(var_args[v]),
                 },
                 Reg32::Reg(Reg::Rax),
             )));
@@ -514,13 +533,13 @@ fn compile_tail_call(
                 Reg::Rax,
                 Arg64::Mem(MemRef {
                     reg: Reg::Rsp,
-                    offset: var_args[v],
+                    offset: Offset::Constant(var_args[v]),
                 }),
             )));
             res.push(Instr::Mov(MovArgs::ToMem(
                 MemRef {
                     reg: Reg::Rsp,
-                    offset: offset,
+                    offset: Offset::Constant(offset),
                 },
                 Reg32::Reg(Reg::Rax),
             )));
@@ -533,12 +552,12 @@ fn compile_tail_call(
         res.push(Instr::Mov(MovArgs::ToMem(
             MemRef {
                 reg: Reg::Rsp,
-                offset: offset,
+                offset: Offset::Constant(offset),
             },
             Reg32::Reg(Reg::Rax),
         )));
     }
-    res.push(Instr::Jmp(format!("func_{}", func)));
+    res.push(Instr::Jmp(JmpArg::Label(format!("func_{}", func))));
     res
 }
 
@@ -585,23 +604,23 @@ fn error_handle_instr() -> Vec<Instr> {
         Instr::Label(ARITH_ERROR.to_string()),
         Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(0))),
         Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
-        Instr::Call(SNAKE_ERROR.to_string()),
+        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
         Instr::Label(CMP_ERROR.to_string()),
         Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(1))),
         Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
-        Instr::Call(SNAKE_ERROR.to_string()),
+        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
         Instr::Label(OVERFLOW.to_string()),
         Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(2))),
         Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
-        Instr::Call(SNAKE_ERROR.to_string()),
+        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
         Instr::Label(IF_ERROR.to_string()),
         Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(3))),
         Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
-        Instr::Call(SNAKE_ERROR.to_string()),
+        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
         Instr::Label(LOGIC_ERROR.to_string()),
         Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(4))),
         Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
-        Instr::Call(SNAKE_ERROR.to_string()),
+        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
     ]
 }
 
