@@ -1,6 +1,7 @@
 use crate::asm::{instrs_to_string, JmpArg, Offset};
 use crate::asm::{Arg32, Arg64, BinArgs, Instr, MemRef, MovArgs, Reg, Reg32};
 use crate::checker;
+use crate::error_handler::*;
 use crate::lambda_lift::lambda_lift;
 use crate::sequentializer;
 use crate::syntax::{
@@ -66,14 +67,6 @@ fn imm_to_rax(imm: &ImmExp, vars: &HashMap<String, i32>) -> Vec<Instr> {
 static SNAKE_TRU: u64 = 0xFF_FF_FF_FF_FF_FF_FF_FF;
 static SNAKE_FLS: u64 = 0x7F_FF_FF_FF_FF_FF_FF_FF;
 static NEW_TYPE_MASK: u32 = 0b111;
-
-static OVERFLOW: &str = "overflow_error";
-static ARITH_ERROR: &str = "arith_error";
-static CMP_ERROR: &str = "cmp_error";
-static IF_ERROR: &str = "if_error";
-static LOGIC_ERROR: &str = "logic_error";
-static NON_ARRAY_ERROR: &str = "non_array_error";
-static SNAKE_ERROR: &str = "snake_error";
 
 fn imm_to_arg64(imm: &ImmExp, vars: &HashMap<String, i32>) -> Arg64 {
     match &imm {
@@ -170,6 +163,32 @@ fn if_check(reg: Reg) -> Vec<Instr> {
         Instr::And(BinArgs::ToReg(Reg::Rcx, Arg32::Signed(1))),
         Instr::Cmp(BinArgs::ToReg(Reg::Rcx, Arg32::Signed(0))),
         Instr::Je(JmpArg::Label(IF_ERROR.to_string())),
+    ]
+}
+
+// R8: index
+// Rax: address
+fn array_access(address: &ImmExp, index: &ImmExp, vars: &HashMap<String, i32>) -> Vec<Instr> {
+    vec![
+        Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(address, vars))),
+        Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
+        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(NEW_TYPE_MASK))),
+        Instr::Cmp(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(1))),
+        Instr::Jne(JmpArg::Label(NON_ARRAY_ERROR.to_string())),
+        Instr::Mov(MovArgs::ToReg(Reg::R8, imm_to_arg64(index, vars))),
+        Instr::Mov(MovArgs::ToReg(Reg::R9, Arg64::Reg(Reg::R8))),
+        Instr::And(BinArgs::ToReg(Reg::R9, Arg32::Unsigned(0b1))),
+        Instr::Cmp(BinArgs::ToReg(Reg::R9, Arg32::Unsigned(0b1))),
+        Instr::Je(JmpArg::Label(INDEX_ERROR.to_string())),
+        Instr::Sar(BinArgs::ToReg(Reg::R8, Arg32::Unsigned(1))),
+        Instr::Cmp(BinArgs::ToMem(
+            MemRef {
+                reg: Reg::Rax,
+                offset: Offset::Constant(0),
+            },
+            Reg32::Reg(Reg::R8),
+        )),
+        Instr::Jge(JmpArg::Label(INDEX_OUT_OF_BOUNDS.to_string())),
     ]
 }
 
@@ -383,7 +402,6 @@ fn compile_to_instrs_inner<'a, 'b>(
                         Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(NEW_TYPE_MASK))),
                         Instr::Cmp(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(1))),
                         Instr::Jne(JmpArg::Label(NON_ARRAY_ERROR.to_string())),
-                        
                         Instr::Xor(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(1))),
                         // check address valid
                         Instr::Mov(MovArgs::ToReg(
@@ -417,33 +435,43 @@ fn compile_to_instrs_inner<'a, 'b>(
                 Prim::GetEnv => todo!(),
                 Prim::CheckArityAndUntag(_) => todo!(),
                 Prim::ArrayGet => {
-                    vec![
-                        Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[0], vars))),
-                        Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
-                        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(NEW_TYPE_MASK))),
-                        Instr::Cmp(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(1))),
-                        Instr::Jne(JmpArg::Label(NON_ARRAY_ERROR.to_string())),
-                        Instr::Mov(MovArgs::ToReg(Reg::R8, imm_to_arg64(&exps[1], vars))),
-                        // check address valid
-                        Instr::Mov(MovArgs::ToReg(
-                            Reg::Rax,
-                            Arg64::Mem(MemRef {
+                    let mut res = array_access(&exps[0], &exps[1], vars);
+                    res.push(Instr::Mov(MovArgs::ToReg(
+                        Reg::Rax,
+                        Arg64::Mem(MemRef {
+                            reg: Reg::Rax,
+                            offset: Offset::Computed {
+                                reg: Reg::R8,
+                                factor: 8, // numbers need / 2 to get value
+                                constant: 8,
+                            },
+                        }),
+                    )));
+                    res
+                }
+                Prim::ArraySet => {
+                    let mut res = array_access(&exps[0], &exps[1], vars);
+                    res.extend(vec![
+                        Instr::Mov(MovArgs::ToReg(Reg::R9, imm_to_arg64(&exps[2], vars))),
+                        Instr::Mov(MovArgs::ToMem(
+                            MemRef {
                                 reg: Reg::Rax,
                                 offset: Offset::Computed {
                                     reg: Reg::R8,
                                     factor: 8,
                                     constant: 8,
                                 },
-                            }),
+                            },
+                            Reg32::Reg(Reg::R9),
                         )),
-                    ]
+                    ]);
+                    res
                 }
-                Prim::ArraySet => todo!(),
                 Prim::MakeArray => {
                     let len: u32 = exps.len().try_into().unwrap();
                     let mut res = vec![Instr::Mov(MovArgs::ToMem(
                         MemRef {
-                            reg: Reg::Rax,
+                            reg: Reg::R15,
                             offset: Offset::Constant(0),
                         },
                         Reg32::Unsigned(len),
@@ -716,31 +744,6 @@ fn push_params(stack: i32, vars: &mut HashMap<String, i32>, params: &[String]) {
     }
 }
 
-fn error_handle_instr() -> Vec<Instr> {
-    vec![
-        Instr::Label(ARITH_ERROR.to_string()),
-        Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(0))),
-        Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
-        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
-        Instr::Label(CMP_ERROR.to_string()),
-        Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(1))),
-        Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
-        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
-        Instr::Label(OVERFLOW.to_string()),
-        Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(2))),
-        Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
-        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
-        Instr::Label(IF_ERROR.to_string()),
-        Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(3))),
-        Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
-        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
-        Instr::Label(LOGIC_ERROR.to_string()),
-        Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(4))),
-        Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
-        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
-    ]
-}
-
 pub fn compile_to_string<Span>(p: &SurfProg<Span>) -> Result<String, CompileErr<Span>>
 where
     Span: Clone,
@@ -772,6 +775,9 @@ start_here:
         push r15            ; save the original value in r15
         sub rsp, 8          ; padding to ensure the correct alignment
         lea r15, [rel HEAP] ; load the address of the HEAP into r15 using rip-relative addressing
+        add r15, 7                       ; add 7 to get above the next multiple of 8
+        mov r8, 0xfffffffffffffff8 ; load a scratch register with the necessary mask
+        and r15, r8                ; and then round back down.
         call main           ; call into the actual code for the main expression of the program
         add rsp, 8          ; remove the padding
         pop r15             ; restore the original to r15

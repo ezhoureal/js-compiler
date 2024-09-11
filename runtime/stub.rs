@@ -26,15 +26,6 @@ static TAG_MASK: u64 = 0x00_00_00_00_00_00_00_01;
 static SNAKE_TRU: SnakeVal = SnakeVal(0xFF_FF_FF_FF_FF_FF_FF_FF);
 static SNAKE_FLS: SnakeVal = SnakeVal(0x7F_FF_FF_FF_FF_FF_FF_FF);
 
-#[link(name = "compiled_code", kind = "static")]
-extern "sysv64" {
-
-    // The \x01 here is an undocumented feature of LLVM that ensures
-    // it does not add an underscore in front of the name.
-    #[link_name = "\x01start_here"]
-    fn start_here() -> SnakeVal;
-}
-
 // reinterprets the bytes of an unsigned number to a signed number
 fn unsigned_to_signed(x: u64) -> i64 {
     i64::from_le_bytes(x.to_le_bytes())
@@ -69,6 +60,9 @@ static CMP_TYPE_ERROR: ErrorCode = 1;
 static OVERFLOW_ERROR: ErrorCode = 2;
 static IF_TYPE_ERROR: ErrorCode = 3;
 static LOGIC_TYPE_ERROR: ErrorCode = 4;
+static NON_ARRAY_ERROR: ErrorCode = 5;
+static INDEX_NOT_NUMBER: ErrorCode = 6;
+static INDEX_OUT_OF_BOUNDS: ErrorCode = 7;
 
 #[export_name = "\x01snake_error"]
 extern "sysv64" fn snake_error(err_code: ErrorCode, v: SnakeVal) {
@@ -82,13 +76,25 @@ extern "sysv64" fn snake_error(err_code: ErrorCode, v: SnakeVal) {
         eprintln!("if expected a boolean {}", sprint_snake_val(v));
     } else if err_code == LOGIC_TYPE_ERROR {
         eprintln!("logic expected a boolean {}", sprint_snake_val(v));
+    } else if err_code == NON_ARRAY_ERROR {
+        eprintln!("not an array address {}", sprint_snake_val(v));
+    } else if err_code == INDEX_NOT_NUMBER {
+        eprintln!("index not a number: {}", sprint_snake_val(v));
+    } else if err_code == INDEX_OUT_OF_BOUNDS {
+        eprintln!("index out of bounds: {}", sprint_snake_val(v));
     } else {
         eprintln!("Unknown error {}", err_code);
     }
     std::process::exit(1);
 }
 
+#[link(name = "compiled_code", kind = "static")]
+extern "C" {
+    #[link_name = "\x01start_here"]
+    fn start_here() -> SnakeVal;
+}
+
 fn main() {
     let output = unsafe { start_here() };
-    println!("{}", sprint_snake_val(output));
+    let _ = print_snake_val(output);
 }
