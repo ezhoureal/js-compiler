@@ -188,7 +188,8 @@ fn array_access(address: &ImmExp, index: &ImmExp, vars: &HashMap<String, i32>) -
             },
             Reg32::Reg(Reg::R8),
         )),
-        Instr::Jge(JmpArg::Label(INDEX_OUT_OF_BOUNDS.to_string())),
+        Instr::Jle(JmpArg::Label(INDEX_OUT_OF_BOUNDS.to_string())),
+        Instr::Sub(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(1)))
     ]
 }
 
@@ -490,6 +491,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                     }
                     res.extend(vec![
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::R15))),
+                        Instr::Add(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(1))),
                         Instr::Add(BinArgs::ToReg(Reg::R15, Arg32::Unsigned((len + 1) * 8))),
                     ]);
                     res
