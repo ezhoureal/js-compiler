@@ -92,12 +92,30 @@ fn uniquify<Span>(e: &Exp<Span>, mapping: &HashMap<String, String>, counter: &mu
         Exp::ExternalCall {
             args: _,
             is_tail,
-            ann: _, fun } => todo!(),
-                    Exp::Semicolon { e1, e2, ann } => todo!(),
-                    Exp::Lambda { parameters, body, ann } => todo!(),
-                    Exp::MakeClosure { arity, label, env, ann } => todo!(),
-                    Exp::ClosureCall(_, _, _) => todo!(),
-                    Exp::DirectCall(_, _, _) => todo!(),
+            ann: _,
+            fun,
+        } => todo!(),
+        Exp::Semicolon { e1, e2, ann } => {
+            *counter += 1;
+            Exp::Let {
+                bindings: vec![(counter.to_string(), uniquify(e1, mapping, counter))],
+                body: Box::new(uniquify(e2, mapping, counter)),
+                ann: (),
+            }
+        }
+        Exp::Lambda {
+            parameters,
+            body,
+            ann,
+        } => todo!(),
+        Exp::MakeClosure {
+            arity,
+            label,
+            env,
+            ann,
+        } => todo!(),
+        Exp::ClosureCall(_, _, _) => todo!(),
+        Exp::DirectCall(_, _, _) => todo!(),
     }
 }
 
@@ -310,7 +328,9 @@ fn should_lift(p: &Exp<()>, funcs: &HashSet<String>, is_tail: bool) -> HashSet<S
         Exp::ExternalCall {
             args,
             is_tail,
-            ann, fun } => todo!(),
+            ann,
+            fun,
+        } => todo!(),
         _ => {}
     }
     set

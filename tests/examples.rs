@@ -99,6 +99,8 @@ mk_test!(list_4, "list_4", "true");
 mk_test!(list_5, "list_5", "true");
 mk_test!(list_6, "list_6", "[4, [true, 3]]");
 mk_test!(list_7, "list_7", "[0, [0, 1]]");
+mk_test!(list_8, "list_8", "[0, [0, 1]]");
+mk_test!(list_9, "list_9", "[0, [0, 1]]");
 
 // IMPLEMENTATION
 fn test_example_file(f: &str, expected_str: &str) -> std::io::Result<()> {

@@ -134,9 +134,29 @@ where
             ann,
             fun,
         } => todo!(),
-        Exp::Semicolon { e1, e2, ann } => todo!(),
-        Exp::Lambda { parameters, body, ann } => todo!(),
-        Exp::MakeClosure { arity, label, env, ann } => todo!(),
+        Exp::Semicolon { e1, e2, ann } => {
+            check_prog(e1, symbols)?;
+            check_prog(
+                &Exp::Let {
+                    bindings: vec![("don't care".to_string(), *e1.clone())],
+                    body: e2.clone(),
+                    ann: ann.clone(),
+                },
+                symbols,
+            )?;
+            Ok(())
+        }
+        Exp::Lambda {
+            parameters,
+            body,
+            ann,
+        } => todo!(),
+        Exp::MakeClosure {
+            arity,
+            label,
+            env,
+            ann,
+        } => todo!(),
         Exp::ClosureCall(_, _, _) => todo!(),
         Exp::DirectCall(_, _, _) => todo!(),
     }

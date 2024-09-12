@@ -66,7 +66,7 @@ fn imm_to_rax(imm: &ImmExp, vars: &HashMap<String, i32>) -> Vec<Instr> {
 
 static SNAKE_TRU: u64 = 0xFF_FF_FF_FF_FF_FF_FF_FF;
 static SNAKE_FLS: u64 = 0x7F_FF_FF_FF_FF_FF_FF_FF;
-static NEW_TYPE_MASK: u32 = 0b111;
+static TYPE_MASK: u32 = 0b111;
 
 fn imm_to_arg64(imm: &ImmExp, vars: &HashMap<String, i32>) -> Arg64 {
     match &imm {
@@ -166,15 +166,17 @@ fn if_check(reg: Reg) -> Vec<Instr> {
     ]
 }
 
-// R8: index
+// result:
 // Rax: address
+// R8: index
 fn array_access(address: &ImmExp, index: &ImmExp, vars: &HashMap<String, i32>) -> Vec<Instr> {
     vec![
         Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(address, vars))),
         Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
-        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(NEW_TYPE_MASK))),
+        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(TYPE_MASK))),
         Instr::Cmp(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(1))),
         Instr::Jne(JmpArg::Label(NON_ARRAY_ERROR.to_string())),
+        Instr::Sub(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(1))),
         Instr::Mov(MovArgs::ToReg(Reg::R8, imm_to_arg64(index, vars))),
         Instr::Mov(MovArgs::ToReg(Reg::R9, Arg64::Reg(Reg::R8))),
         Instr::And(BinArgs::ToReg(Reg::R9, Arg32::Unsigned(0b1))),
@@ -189,7 +191,6 @@ fn array_access(address: &ImmExp, index: &ImmExp, vars: &HashMap<String, i32>) -
             Reg32::Reg(Reg::R8),
         )),
         Instr::Jle(JmpArg::Label(INDEX_OUT_OF_BOUNDS.to_string())),
-        Instr::Sub(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(1)))
     ]
 }
 
@@ -400,7 +401,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                     vec![
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[0], vars))),
                         Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
-                        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(NEW_TYPE_MASK))),
+                        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(TYPE_MASK))),
                         Instr::Cmp(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(1))),
                         Instr::Jne(JmpArg::Label(NON_ARRAY_ERROR.to_string())),
                         Instr::Xor(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(1))),
@@ -422,7 +423,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                     vec![
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[0], vars))),
                         Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
-                        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(NEW_TYPE_MASK))),
+                        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(TYPE_MASK))),
                         Instr::Cmp(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(1))),
                         Instr::Jne(JmpArg::Label(fls_label.clone())),
                         Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_TRU))),
@@ -465,6 +466,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                             },
                             Reg32::Reg(Reg::R9),
                         )),
+                        Instr::Add(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(1)))
                     ]);
                     res
                 }
