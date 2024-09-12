@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 #[repr(C)]
 #[derive(PartialEq, Eq, Copy, Clone)]
 struct SnakeVal(u64);
@@ -31,7 +33,24 @@ fn unsigned_to_signed(x: u64) -> i64 {
     i64::from_le_bytes(x.to_le_bytes())
 }
 
-fn sprint_snake_val(x: SnakeVal) -> String {
+fn print_array(a: &SnakeArray, visited: &mut HashSet<*const SnakeVal>) -> String {
+    let mut s = "[".to_string();
+    unsafe {
+        let mut p = a.elts;
+        for element in 0..a.size {
+            s += &sprint_snake_val_inner(*p, visited);
+            p = p.add(1);
+            if element < a.size - 1 {
+                s += ", ";
+            } else {
+                s += "]";
+            }
+        }
+    }
+    s.to_string()
+}
+
+fn sprint_snake_val_inner(x: SnakeVal, visited: &mut HashSet<*const SnakeVal>) -> String {
     if x.0 & TAG_MASK == 0 {
         // it's a number
         format!("{}", unsigned_to_signed(x.0) >> 1)
@@ -39,9 +58,23 @@ fn sprint_snake_val(x: SnakeVal) -> String {
         String::from("true")
     } else if x == SNAKE_FLS {
         String::from("false")
+    } else if x.0 & 0b111 == 1 {
+        let array = load_snake_array(&x.0);
+        if visited.contains(&array.elts) {
+            return "<loop>".to_string();
+        } else {
+            visited.insert(array.elts);
+        }
+        print_array(&array, visited)
+    } else if x.0 & 0b111 == 0b11 {
+        "<closure>".to_string()
     } else {
         format!("Invalid snake value 0x{:x}", x.0)
     }
+}
+
+fn sprint_snake_val(x: SnakeVal) -> String {
+    sprint_snake_val_inner(x, &mut HashSet::new())
 }
 
 #[export_name = "\x01print_snake_val"]
