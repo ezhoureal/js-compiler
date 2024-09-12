@@ -14,8 +14,9 @@ struct SnakeArray {
  * into something more convenient to access
  *
  */
-fn load_snake_array(p: *const u64) -> SnakeArray {
+fn load_snake_array(address: u64) -> SnakeArray {
     unsafe {
+        let p : *const u64   = std::mem::transmute(address - 1);
         let size = *p;
         SnakeArray {
             size,
@@ -33,24 +34,24 @@ fn unsigned_to_signed(x: u64) -> i64 {
     i64::from_le_bytes(x.to_le_bytes())
 }
 
-fn print_array(a: &SnakeArray, visited: &mut HashSet<*const SnakeVal>) -> String {
+fn print_array(a: &SnakeArray, visited: &mut HashSet<u64>) -> String {
     let mut s = "[".to_string();
-    unsafe {
-        let mut p = a.elts;
-        for element in 0..a.size {
+    let mut p = a.elts;
+    for i in 0..a.size {
+        unsafe {
             s += &sprint_snake_val_inner(*p, visited);
             p = p.add(1);
-            if element < a.size - 1 {
-                s += ", ";
-            } else {
-                s += "]";
-            }
+        }
+        if i < a.size - 1 {
+            s += ", ";
+        } else {
+            s += "]";
         }
     }
     s.to_string()
 }
 
-fn sprint_snake_val_inner(x: SnakeVal, visited: &mut HashSet<*const SnakeVal>) -> String {
+fn sprint_snake_val_inner(x: SnakeVal, visited: &mut HashSet<u64>) -> String {
     if x.0 & TAG_MASK == 0 {
         // it's a number
         format!("{}", unsigned_to_signed(x.0) >> 1)
@@ -59,12 +60,11 @@ fn sprint_snake_val_inner(x: SnakeVal, visited: &mut HashSet<*const SnakeVal>) -
     } else if x == SNAKE_FLS {
         String::from("false")
     } else if x.0 & 0b111 == 1 {
-        let array = load_snake_array(&x.0);
-        if visited.contains(&array.elts) {
+        if visited.contains(&x.0) {
             return "<loop>".to_string();
-        } else {
-            visited.insert(array.elts);
         }
+        visited.insert(x.0);
+        let array = load_snake_array(x.0);
         print_array(&array, visited)
     } else if x.0 & 0b111 == 0b11 {
         "<closure>".to_string()
