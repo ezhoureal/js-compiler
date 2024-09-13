@@ -47,7 +47,7 @@ pub fn check_prog<Span>(p: &SurfProg<Span>) -> Result<(), CompileErr<Span>>
 where
     Span: Clone,
 {
-    let res = checker::check_prog(p, &HashMap::new());
+    let res = checker::check_prog(p, &HashSet::new());
     res
 }
 
@@ -752,7 +752,7 @@ pub fn compile_to_string<Span>(p: &SurfProg<Span>) -> Result<String, CompileErr<
 where
     Span: Clone,
 {
-    checker::check_prog(p, &HashMap::new())?;
+    checker::check_prog(p, &HashSet::new())?;
     let (global_functions, main) = lambda_lift(&p);
     println!("global function size = {}", global_functions.len());
     let program = sequentializer::seq_prog(&global_functions, &main);

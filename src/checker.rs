@@ -1,19 +1,13 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::{compile::CompileErr, syntax::*};
 
 static I63_MAX: i64 = 0x3F_FF_FF_FF_FF_FF_FF_FF;
 static I63_MIN: i64 = -0x40_00_00_00_00_00_00_00;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Symbol {
-    Func(usize),
-    Var,
-}
-
 pub fn check_prog<Span>(
     e: &Exp<Span>,
-    symbols: &HashMap<String, Symbol>,
+    symbols: &HashSet<String>,
 ) -> Result<(), CompileErr<Span>>
 where
     Span: Clone,
@@ -29,7 +23,7 @@ where
             Ok(())
         }
         Exp::Var(name, ann) => {
-            if !symbols.contains_key(name) {
+            if !symbols.contains(name) {
                 return Err(CompileErr::UnboundVariable {
                     unbound: name.clone(),
                     location: ann.clone(),
@@ -58,7 +52,7 @@ where
                     });
                 }
                 appeared.insert(name);
-                scoped_symbols.insert(name.clone(), Symbol::Var);
+                scoped_symbols.insert(name.clone());
                 check_prog(value, &scoped_symbols)?;
             }
             check_prog(body, &scoped_symbols)
@@ -86,46 +80,22 @@ where
                     });
                 }
                 mutual_funcs.insert(decl.name.clone());
-                scoped_symbols.insert(decl.name.clone(), Symbol::Func(decl.parameters.len()));
+                scoped_symbols.insert(decl.name.clone());
             }
             for decl in decls {
                 for param in &decl.parameters {
-                    scoped_symbols.insert(param.clone(), Symbol::Var);
+                    scoped_symbols.insert(param.clone());
                 }
                 check_prog(&decl.body, &scoped_symbols)?;
             }
             check_prog(body, &scoped_symbols)
         }
         Exp::Call(func, params, ann) => {
-            todo!()
-            // if !symbols.contains_key(func) {
-            //     return Err(CompileErr::UndefinedFunction {
-            //         undefined: func.clone(),
-            //         location: ann.clone(),
-            //     });
-            // }
-            // match &symbols[func] {
-            //     Symbol::Func(param_size) => {
-            //         if params.len() != *param_size {
-            //             return Err(CompileErr::FunctionCalledWrongArity {
-            //                 function_name: func.clone(),
-            //                 correct_arity: *param_size,
-            //                 arity_used: params.len(),
-            //                 location: ann.clone(),
-            //             });
-            //         }
-            //     }
-            //     Symbol::Var => {
-            //         return Err(CompileErr::ValueUsedAsFunction {
-            //             variable_name: func.clone(),
-            //             location: ann.clone(),
-            //         });
-            //     }
-            // }
-            // for p in params {
-            //     check_prog(p, &symbols)?;
-            // }
-            // Ok(())
+            check_prog(func, symbols)?;
+            for p in params {
+                check_prog(p, &symbols)?;
+            }
+            Ok(())
         }
         Exp::InternalTailCall(_, _, _) => todo!(),
         Exp::ExternalCall {
