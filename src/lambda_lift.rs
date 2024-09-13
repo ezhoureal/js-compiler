@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     iter::FromIterator,
+    os::unix::fs::DirBuilderExt,
 };
 
 use crate::syntax::*;
@@ -80,14 +81,14 @@ fn uniquify<Span>(e: &Exp<Span>, mapping: &HashMap<String, String>, counter: &mu
             els: Box::new(uniquify(&els, mapping, counter)),
             ann: (),
         },
-        Exp::Call(func, params, _) => {
-            todo!()
-            // let uniq_params = params
-            //     .iter()
-            //     .map(|s| uniquify(s, mapping, counter))
-            //     .collect();
-            // Exp::Call(mapping[func].clone(), uniq_params, ())
-        }
+        Exp::Call(func, params, _) => Exp::Call(
+            Box::new(uniquify(&func, mapping, counter)),
+            params
+                .iter()
+                .map(|param| uniquify(param, mapping, counter))
+                .collect(),
+            (),
+        ),
         Exp::InternalTailCall(_, _, _) => todo!(),
         Exp::ExternalCall {
             args: _,
@@ -168,28 +169,34 @@ fn rewrite_call_params(
             body: Box::new(rewrite_call_params(body, globals, is_tail)),
             ann: (),
         },
-        Exp::Call(func, params, _) => {
-            todo!()
-            // let mut mod_params: Vec<_> = params
-            //     .iter()
-            //     .map(|param| rewrite_call_params(param, globals, false))
-            //     .collect();
-            // if !globals.contains_key(func) {
-            //     assert!(is_tail);
-            //     return Exp::InternalTailCall(func.clone(), mod_params, ());
-            // }
+        Exp::DirectCall(func, params, _) => {
+            let mut mod_params: Vec<_> = params
+                .iter()
+                .map(|param| rewrite_call_params(param, globals, false))
+                .collect();
+            if !globals.contains_key(func) {
+                assert!(is_tail);
+                return Exp::InternalTailCall(func.clone(), mod_params, ());
+            }
 
-            // println!("return external call from call, isTail = {}", is_tail);
-            // for p in globals[func].parameters.iter().skip(params.len()) {
-            //     mod_params.push(Exp::Var(p.clone(), ()))
-            // }
-            // Exp::ExternalCall {
-            //     fun_name: func.to_string(),
-            //     args: mod_params,
-            //     is_tail: is_tail,
-            //     ann: (),
-            // }
+            println!("return external call from call, isTail = {}", is_tail);
+            for p in globals[func].parameters.iter().skip(params.len()) {
+                mod_params.push(Exp::Var(p.clone(), ()))
+            }
+            Exp::ExternalCall {
+                fun: VarOrLabel::Label(func.to_string()),
+                args: mod_params,
+                is_tail: is_tail,
+                ann: (),
+            }
         }
+        Exp::ClosureCall(_, _, _) => todo!(),
+        Exp::Lambda { parameters, body, ann } => todo!(),
+        Exp::MakeClosure { arity, label, env, ann } => todo!(),
+        Exp::InternalTailCall(_, _, _) => todo!(),
+        Exp::ExternalCall { fun, args, is_tail, ann } => todo!(),
+        Exp::Call(_, _, _) => todo!(),
+        Exp::Semicolon { e1, e2, ann } => todo!(),
         _ => e.clone(),
     }
 }
@@ -266,13 +273,20 @@ fn lift_functions(
             }
             new_bod
         }
-        Exp::Call(func, params, _) => {
+        Exp::DirectCall(func, params, _) => {
             let new_params = params
                 .iter()
                 .map(|param| lift_functions(param, vars, globals, need_lift))
                 .collect();
-            Exp::Call(func.clone(), new_params, ())
+            Exp::DirectCall(func.clone(), new_params, ())
         }
+        Exp::ClosureCall(_, _, _) => todo!(),
+        Exp::Lambda { parameters, body, ann } => todo!(),
+        Exp::MakeClosure { arity, label, env, ann } => todo!(),
+        Exp::InternalTailCall(_, _, _) => todo!(),
+        Exp::ExternalCall { fun, args, is_tail, ann } => todo!(),
+        Exp::Call(_, _, _) => todo!(),
+        Exp::Semicolon { e1, e2, ann } => todo!(),
         _ => e.clone(),
     }
 }
@@ -316,7 +330,7 @@ fn should_lift(p: &Exp<()>, funcs: &HashSet<String>, is_tail: bool) -> HashSet<S
             }
             set.extend(should_lift(body, &scoped_funcs, is_tail));
         }
-        Exp::Call(func, args, _) => {
+        Exp::DirectCall(func, args, _) => {
             if !is_tail {
                 set.extend(funcs.clone());
             }
@@ -324,22 +338,116 @@ fn should_lift(p: &Exp<()>, funcs: &HashSet<String>, is_tail: bool) -> HashSet<S
                 set.extend(should_lift(arg, funcs, false));
             }
         }
+        Exp::ClosureCall(_, _, _) => todo!(),
+        Exp::Lambda { parameters, body, ann } => todo!(),
+        Exp::MakeClosure { arity, label, env, ann } => todo!(),
+        Exp::Call(_, _, _) => todo!(),
         Exp::InternalTailCall(_, _, _) => todo!(),
-        Exp::ExternalCall {
-            args,
-            is_tail,
-            ann,
-            fun,
-        } => todo!(),
-        _ => {}
+        Exp::ExternalCall { fun, args, is_tail, ann } => todo!(),
+        _ => ()
     }
     set
 }
 
+fn eliminate_closures(e: &Exp<()>, funcs: &HashSet<String>) -> Exp<()> {
+    match e {
+        Exp::Num(_, _) => e.clone(),
+        Exp::Bool(_, _) => e.clone(),
+        Exp::Var(_, _) => e.clone(),
+        Exp::Prim(p, exps, _) => Exp::Prim(
+            p.clone(),
+            exps.iter()
+                .map(|exp| Box::new(eliminate_closures(exp, funcs)))
+                .collect(),
+            (),
+        ),
+        Exp::Let {
+            bindings,
+            body,
+            ann,
+        } => Exp::Let {
+            bindings: bindings
+                .iter()
+                .map(|bind| (bind.0.clone(), eliminate_closures(&bind.1, funcs)))
+                .collect(),
+            body: Box::new(eliminate_closures(&body, funcs)),
+            ann: (),
+        },
+        Exp::If {
+            cond,
+            thn,
+            els,
+            ann,
+        } => Exp::If {
+            cond: Box::new(eliminate_closures(&cond, funcs)),
+            thn: Box::new(eliminate_closures(&thn, funcs)),
+            els: Box::new(eliminate_closures(els, funcs)),
+            ann: (),
+        },
+        Exp::Semicolon { e1, e2, ann } => todo!(), // already eliminated
+        Exp::FunDefs { decls, body, ann } => {
+            let mut scoped_funcs = funcs.clone();
+            for decl in decls {
+                scoped_funcs.insert(decl.name.clone());
+            }
+            Exp::FunDefs {
+                decls: decls
+                    .iter()
+                    .map(|decl| FunDecl {
+                        name: decl.name.clone(),
+                        parameters: decl.parameters.clone(),
+                        body: eliminate_closures(&decl.body, &scoped_funcs),
+                        ann: (),
+                    })
+                    .collect(),
+                body: Box::new(eliminate_closures(body, &scoped_funcs)),
+                ann: (),
+            }
+        }
+        Exp::Lambda {
+            parameters,
+            body,
+            ann,
+        } => Exp::Lambda {
+            parameters: parameters.clone(),
+            body: Box::new(eliminate_closures(&body, funcs)),
+            ann: (),
+        },
+        Exp::MakeClosure {
+            arity,
+            label,
+            env,
+            ann,
+        } => todo!(),
+        Exp::Call(v, params, _) => {
+            let new_params = params
+                .iter()
+                .map(|param| eliminate_closures(param, funcs))
+                .collect();
+            if let Exp::Var(func, _) = *v.clone() {
+                if funcs.contains(&func) {
+                    return Exp::DirectCall(func, new_params, ());
+                }
+            }
+            Exp::ClosureCall(Box::new(eliminate_closures(&v, funcs)), new_params, ())
+        }
+        Exp::ClosureCall(_, _, _) => todo!(),
+        Exp::DirectCall(_, _, _) => todo!(),
+        Exp::InternalTailCall(_, _, _) => todo!(),
+        Exp::ExternalCall {
+            fun,
+            args,
+            is_tail,
+            ann,
+        } => todo!(),
+    }
+}
+
 // Lift some functions to global definitions
 pub fn lambda_lift<Ann>(p: &Exp<Ann>) -> (Vec<FunDecl<Exp<()>, ()>>, Exp<()>) {
-    let unique_p = uniquify(&p, &mut HashMap::new(), &mut 0);
+    let mut unique_p = uniquify(&p, &mut HashMap::new(), &mut 0);
     println!("after uniquify: {:#?}", unique_p);
+    unique_p = eliminate_closures(&unique_p, &HashSet::new());
     let mut globals = HashMap::new();
     let to_lift = should_lift(&unique_p, &HashSet::new(), true);
     println!(
