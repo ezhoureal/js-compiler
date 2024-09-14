@@ -461,7 +461,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                             },
                             Reg32::Reg(Reg::R9),
                         )),
-                        Instr::Add(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(1)))
+                        Instr::Add(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(1))),
                     ]);
                     res
                 }
@@ -656,7 +656,7 @@ fn compile_tail_call(
             }
             var_args.insert(
                 v.clone(),
-                8 * (i32::try_from(var_args.len()).unwrap() + stack + 1),
+                -8 * (i32::try_from(var_args.len()).unwrap() + stack + 1),
             );
             res.push(Instr::Mov(MovArgs::ToReg(
                 Reg::Rax,
@@ -672,6 +672,7 @@ fn compile_tail_call(
         }
     }
     for (i, arg) in args.iter().enumerate() {
+        println!("decl stack = {}", decl_stack);
         let offset: i32 = -8 * (i32::try_from(i).unwrap() + decl_stack + 1);
         if let ImmExp::Var(v) = arg {
             res.push(Instr::Mov(MovArgs::ToReg(
@@ -688,19 +689,19 @@ fn compile_tail_call(
                 },
                 Reg32::Reg(Reg::Rax),
             )));
-            continue;
+        } else {
+            res.push(Instr::Mov(MovArgs::ToReg(
+                Reg::Rax,
+                imm_to_arg64(arg, vars),
+            )));
+            res.push(Instr::Mov(MovArgs::ToMem(
+                MemRef {
+                    reg: Reg::Rsp,
+                    offset: Offset::Constant(offset),
+                },
+                Reg32::Reg(Reg::Rax),
+            )));
         }
-        res.push(Instr::Mov(MovArgs::ToReg(
-            Reg::Rax,
-            imm_to_arg64(arg, vars),
-        )));
-        res.push(Instr::Mov(MovArgs::ToMem(
-            MemRef {
-                reg: Reg::Rsp,
-                offset: Offset::Constant(offset),
-            },
-            Reg32::Reg(Reg::Rax),
-        )));
     }
     res.push(Instr::Jmp(JmpArg::Label(format!("func_{}", func))));
     res
