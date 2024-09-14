@@ -51,11 +51,6 @@ where
     res
 }
 
-// Parse Calls into either DirectCall or ClosureCall
-fn eliminate_closures<Ann>(e: &Exp<Ann>) -> Exp<()> {
-    panic!("NYI: uniquify")
-}
-
 // returns instruction to move imm to Rax
 fn imm_to_rax(imm: &ImmExp, vars: &HashMap<String, i32>) -> Vec<Instr> {
     vec![Instr::Mov(MovArgs::ToReg(
@@ -766,10 +761,10 @@ where
     let main_is = instrs_to_string(&compile_to_instrs(&program.main, &mut counter));
 
     let res = format!(
-        "\
-        section .data
+"\
+section .data
         HEAP:    times 1024 dq 0
-        section .text
+section .text
         global start_here
         extern snake_error
         extern print_snake_val
