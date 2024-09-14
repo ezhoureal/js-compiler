@@ -559,15 +559,18 @@ fn compile_to_instrs_inner<'a, 'b>(
             *counter += 1;
             let body_label = format!("body_{}", counter);
             let mut res = vec![Instr::Jmp(JmpArg::Label(body_label.clone()))];
+            // handle mutually recursive functions
             for decl in decls {
                 functions.insert(decl.name.clone(), stack);
+            }
+            for decl in decls {
                 push_params(stack, vars, &decl.parameters);
                 res.push(Instr::Label(format!("func_{}", decl.name.clone())));
                 res.extend(stack_check());
                 res.extend(compile_to_instrs_inner(
                     &decl.body,
                     counter,
-                    i32::try_from(decl.parameters.len()).unwrap(),
+                    i32::try_from(decl.parameters.len()).unwrap() + stack,
                     vars,
                     functions,
                 ));
@@ -580,6 +583,7 @@ fn compile_to_instrs_inner<'a, 'b>(
             res
         }
         SeqExp::InternalTailCall(func, args, _) => {
+            assert!(functions.contains_key(func), "function {} not found", func);
             return compile_tail_call(func.clone(), args, stack, functions[func], vars);
         }
         SeqExp::ExternalCall {

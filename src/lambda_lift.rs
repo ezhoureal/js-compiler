@@ -162,7 +162,7 @@ fn rewrite_call_params(
                 .map(|decl| FunDecl {
                     name: decl.name.clone(),
                     parameters: decl.parameters.clone(),
-                    body: rewrite_call_params(&decl.body, globals, is_tail),
+                    body: rewrite_call_params(&decl.body, globals, true),
                     ann: (),
                 })
                 .collect(),
@@ -191,10 +191,24 @@ fn rewrite_call_params(
             }
         }
         Exp::ClosureCall(_, _, _) => todo!(),
-        Exp::Lambda { parameters, body, ann } => todo!(),
-        Exp::MakeClosure { arity, label, env, ann } => todo!(),
+        Exp::Lambda {
+            parameters,
+            body,
+            ann,
+        } => todo!(),
+        Exp::MakeClosure {
+            arity,
+            label,
+            env,
+            ann,
+        } => todo!(),
         Exp::InternalTailCall(_, _, _) => todo!(),
-        Exp::ExternalCall { fun, args, is_tail, ann } => todo!(),
+        Exp::ExternalCall {
+            fun,
+            args,
+            is_tail,
+            ann,
+        } => todo!(),
         Exp::Call(_, _, _) => todo!(),
         Exp::Semicolon { e1, e2, ann } => todo!(),
         _ => e.clone(),
@@ -281,10 +295,24 @@ fn lift_functions(
             Exp::DirectCall(func.clone(), new_params, ())
         }
         Exp::ClosureCall(_, _, _) => todo!(),
-        Exp::Lambda { parameters, body, ann } => todo!(),
-        Exp::MakeClosure { arity, label, env, ann } => todo!(),
+        Exp::Lambda {
+            parameters,
+            body,
+            ann,
+        } => todo!(),
+        Exp::MakeClosure {
+            arity,
+            label,
+            env,
+            ann,
+        } => todo!(),
         Exp::InternalTailCall(_, _, _) => todo!(),
-        Exp::ExternalCall { fun, args, is_tail, ann } => todo!(),
+        Exp::ExternalCall {
+            fun,
+            args,
+            is_tail,
+            ann,
+        } => todo!(),
         Exp::Call(_, _, _) => todo!(),
         Exp::Semicolon { e1, e2, ann } => todo!(),
         _ => e.clone(),
@@ -297,7 +325,7 @@ fn should_lift(p: &Exp<()>, funcs: &HashSet<String>, is_tail: bool) -> HashSet<S
     match p {
         Exp::Prim(_, exps, _) => {
             for exp in exps {
-                set.extend(should_lift(exp, funcs, is_tail));
+                set.extend(should_lift(exp, funcs, false));
             }
         }
         Exp::Let {
@@ -339,12 +367,26 @@ fn should_lift(p: &Exp<()>, funcs: &HashSet<String>, is_tail: bool) -> HashSet<S
             }
         }
         Exp::ClosureCall(_, _, _) => todo!(),
-        Exp::Lambda { parameters, body, ann } => todo!(),
-        Exp::MakeClosure { arity, label, env, ann } => todo!(),
+        Exp::Lambda {
+            parameters,
+            body,
+            ann,
+        } => todo!(),
+        Exp::MakeClosure {
+            arity,
+            label,
+            env,
+            ann,
+        } => todo!(),
         Exp::Call(_, _, _) => todo!(),
         Exp::InternalTailCall(_, _, _) => todo!(),
-        Exp::ExternalCall { fun, args, is_tail, ann } => todo!(),
-        _ => ()
+        Exp::ExternalCall {
+            fun,
+            args,
+            is_tail,
+            ann,
+        } => todo!(),
+        _ => (),
     }
     set
 }
