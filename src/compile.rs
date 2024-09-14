@@ -671,8 +671,8 @@ fn compile_tail_call(
             )));
         }
     }
+    println!("decl stack = {}, arg size = {}", decl_stack, args.len());
     for (i, arg) in args.iter().enumerate() {
-        println!("decl stack = {}", decl_stack);
         let offset: i32 = -8 * (i32::try_from(i).unwrap() + decl_stack + 1);
         if let ImmExp::Var(v) = arg {
             res.push(Instr::Mov(MovArgs::ToReg(

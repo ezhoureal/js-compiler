@@ -326,7 +326,7 @@ fn should_lift(p: &Exp<()>, funcs: &HashSet<String>, is_tail: bool) -> HashSet<S
                 scoped_funcs.insert(decl.name.clone());
             }
             for decl in decls {
-                set.extend(should_lift(&decl.body, &scoped_funcs, false));
+                set.extend(should_lift(&decl.body, &scoped_funcs, true));
             }
             set.extend(should_lift(body, &scoped_funcs, is_tail));
         }
