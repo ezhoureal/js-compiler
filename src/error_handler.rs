@@ -1,4 +1,4 @@
-use crate::asm::{Arg64, Instr, JmpArg, MovArgs, Reg};
+use crate::asm::{Arg32, Arg64, BinArgs, Instr, JmpArg, MovArgs, Reg};
 
 pub static OVERFLOW: &str = "overflow_error";
 pub static ARITH_ERROR: &str = "arith_error";
@@ -8,7 +8,17 @@ pub static LOGIC_ERROR: &str = "logic_error";
 pub static NON_ARRAY_ERROR: &str = "non_array_error";
 pub static INDEX_ERROR: &str = "index_not_number";
 pub static INDEX_OUT_OF_BOUNDS: &str = "index_out_of_bounds";
+pub static STACK_ERROR: &str = "stack_error";
 pub static SNAKE_ERROR: &str = "snake_error";
+
+pub fn stack_check() -> Vec<Instr> {
+    vec![
+        Instr::Mov(MovArgs::ToReg(Reg::R8, Arg64::Reg(Reg::Rsp))),
+        Instr::And(BinArgs::ToReg(Reg::R8, Arg32::Unsigned(0b1111))),
+        Instr::Cmp(BinArgs::ToReg(Reg::R8, Arg32::Unsigned(0))),
+        Instr::Jne(JmpArg::Label(STACK_ERROR.to_string())),
+    ]
+}
 
 pub fn error_handle_instr() -> Vec<Instr> {
     vec![
@@ -43,6 +53,10 @@ pub fn error_handle_instr() -> Vec<Instr> {
         Instr::Label(INDEX_OUT_OF_BOUNDS.to_string()),
         Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(7))),
         Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::R8))),
+        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
+        Instr::Label(STACK_ERROR.to_string()),
+        Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(99))),
+        Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rsp))),
         Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
     ]
 }

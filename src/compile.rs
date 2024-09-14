@@ -563,6 +563,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                 functions.insert(decl.name.clone(), stack);
                 push_params(stack, vars, &decl.parameters);
                 res.push(Instr::Label(format!("func_{}", decl.name.clone())));
+                res.extend(stack_check());
                 res.extend(compile_to_instrs_inner(
                     &decl.body,
                     counter,
@@ -714,6 +715,7 @@ fn compile_to_instrs(e: &SeqExp<()>, counter: &mut u32) -> Vec<Instr> {
 
 fn compile_func_to_instr(f: &FunDecl<SeqExp<()>, ()>, counter: &mut u32) -> Vec<Instr> {
     let mut is = vec![Instr::Label(format!("func_{}", f.name))];
+    is.extend(stack_check());
     let mut vars = HashMap::<String, i32>::new();
     push_params(0, &mut vars, &f.parameters);
     is.extend(compile_to_instrs_inner(
@@ -761,7 +763,7 @@ where
     let main_is = instrs_to_string(&compile_to_instrs(&program.main, &mut counter));
 
     let res = format!(
-"\
+        "\
 section .data
         HEAP:    times 1024 dq 0
 section .text
@@ -783,9 +785,11 @@ start_here:
         ret
 main:
 {}
+{}
 ",
         instrs_to_string(&error_handle_instr()),
         functions_is,
+        instrs_to_string(&stack_check()),
         main_is
     );
     println!("{}", res);

@@ -16,7 +16,7 @@ struct SnakeArray {
  */
 fn load_snake_array(address: u64) -> SnakeArray {
     unsafe {
-        let p : *const u64   = std::mem::transmute(address - 1);
+        let p: *const u64 = std::mem::transmute(address - 1);
         let size = *p;
         SnakeArray {
             size,
@@ -115,6 +115,8 @@ extern "sysv64" fn snake_error(err_code: ErrorCode, v: SnakeVal) {
         eprintln!("index not a number: {}", sprint_snake_val(v));
     } else if err_code == INDEX_OUT_OF_BOUNDS {
         eprintln!("index out of bounds: {}", sprint_snake_val(v));
+    } else if err_code == 99 {
+        eprintln!("stack error: {:x}", v.0);
     } else {
         eprintln!("Unknown error {}", err_code);
     }
