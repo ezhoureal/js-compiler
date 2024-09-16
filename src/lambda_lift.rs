@@ -231,12 +231,9 @@ fn rewrite_call_params(
             ],
             body: Box::new(Exp::ExternalCall {
                 fun: VarOrLabel::Var("#code_ptr".to_string()),
-                args: vec![Exp::Var("#env".to_string(), ())]
-                    .into_iter()
-                    .chain(
-                        args.iter()
-                            .map(|arg| rewrite_call_params(arg, globals, false)),
-                    )
+                args: args.iter()
+                    .map(|arg| rewrite_call_params(arg, globals, false))
+                    .chain(std::iter::once(Exp::Var("#env".to_string(), ())))
                     .collect(),
                 is_tail,
                 ann: (),
