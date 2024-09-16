@@ -108,7 +108,18 @@ fn uniquify<Span>(e: &Exp<Span>, mapping: &HashMap<String, String>, counter: &mu
             parameters,
             body,
             ann,
-        } => todo!(),
+        } => {
+            let mut scoped_mapping = mapping.clone();
+            for param in parameters {
+                *counter += 1;
+                scoped_mapping.insert(param.to_string(), format!("{}", counter));
+            }
+            Exp::Lambda {
+                parameters: parameters.clone(),
+                body: Box::new(uniquify(&body, &scoped_mapping, counter)),
+                ann: (),
+            }
+        }
         Exp::MakeClosure {
             arity,
             label,
@@ -190,18 +201,25 @@ fn rewrite_call_params(
                 ann: (),
             }
         }
-        Exp::ClosureCall(_, _, _) => todo!(),
+        Exp::ClosureCall(func, params, _) => Exp::ClosureCall(
+            Box::new(rewrite_call_params(func, globals, false)),
+            params
+                .iter()
+                .map(|param| rewrite_call_params(param, globals, false))
+                .collect(),
+            (),
+        ),
         Exp::Lambda {
             parameters,
             body,
             ann,
-        } => todo!(),
+        } => panic!(),
         Exp::MakeClosure {
             arity,
             label,
             env,
             ann,
-        } => todo!(),
+        } => e.clone(),
         Exp::InternalTailCall(_, _, _) => todo!(),
         Exp::ExternalCall {
             fun,
@@ -294,12 +312,58 @@ fn lift_functions(
                 .collect();
             Exp::DirectCall(func.clone(), new_params, ())
         }
-        Exp::ClosureCall(_, _, _) => todo!(),
+        Exp::ClosureCall(exp, params, _) => Exp::ClosureCall(
+            Box::new(lift_functions(exp, vars, globals, need_lift)),
+            params
+                .iter()
+                .map(|param| lift_functions(param, vars, globals, need_lift))
+                .collect(),
+            (),
+        ),
         Exp::Lambda {
             parameters,
             body,
             ann,
-        } => todo!(),
+        } => {
+            let mut env_bindings = vec![];
+            for (i, v) in vars.iter().enumerate() {
+                env_bindings.push((
+                    v.clone(),
+                    Exp::Prim(
+                        Prim::ArrayGet,
+                        vec![
+                            Box::new(Exp::Var("env".to_string(), ())),
+                            Box::new(Exp::Num(i as i64, ())),
+                        ],
+                        (),
+                    ),
+                ));
+            }
+            let decl = FunDecl {
+                // use globals.len() as counter
+                name: format!("lambda_{}", globals.len()),
+                parameters: [parameters.clone(), vec!["env".to_string()]].concat(),
+                body: Exp::Let {
+                    bindings: env_bindings,
+                    body: Box::new(lift_functions(body, vars, globals, need_lift)),
+                    ann: (),
+                },
+                ann: (),
+            };
+            globals.insert(decl.name.clone(), decl.clone());
+            Exp::MakeClosure {
+                arity: parameters.len(),
+                label: decl.name.clone(),
+                env: Box::new(Exp::Prim(
+                    Prim::MakeArray,
+                    vars.iter()
+                        .map(|v| Box::new(Exp::Var(v.clone(), ())))
+                        .collect(),
+                    (),
+                )),
+                ann: (),
+            }
+        }
         Exp::MakeClosure {
             arity,
             label,
@@ -323,6 +387,11 @@ fn lift_functions(
 fn should_lift(p: &Exp<()>, funcs: &HashSet<String>, is_tail: bool) -> HashSet<String> {
     let mut set = HashSet::new();
     match p {
+        Exp::Var(s, _) => {
+            if funcs.contains(s) {
+                set.insert(s.clone());
+            }
+        }
         Exp::Prim(_, exps, _) => {
             for exp in exps {
                 set.extend(should_lift(exp, funcs, false));
@@ -366,12 +435,19 @@ fn should_lift(p: &Exp<()>, funcs: &HashSet<String>, is_tail: bool) -> HashSet<S
                 set.extend(should_lift(arg, funcs, false));
             }
         }
-        Exp::ClosureCall(_, _, _) => todo!(),
+        Exp::ClosureCall(func, params, _) => {
+            set.extend(should_lift(func, funcs, false));
+            for param in params {
+                set.extend(should_lift(param, funcs, false));
+            }
+        }
         Exp::Lambda {
             parameters,
             body,
             ann,
-        } => todo!(),
+        } => {
+            set.extend(should_lift(body, funcs, true));
+        }
         Exp::MakeClosure {
             arity,
             label,

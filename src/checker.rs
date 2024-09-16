@@ -120,7 +120,13 @@ where
             parameters,
             body,
             ann,
-        } => todo!(),
+        } => {
+            let mut scoped_symbols = symbols.clone();
+            for p in parameters {
+                scoped_symbols.insert(p.clone());
+            }
+            check_prog(body, &scoped_symbols)
+        }
         Exp::MakeClosure {
             arity,
             label,
