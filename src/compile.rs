@@ -410,7 +410,23 @@ fn compile_to_instrs_inner<'a, 'b>(
                         )),
                     ]
                 }
-                Prim::IsFun => todo!(),
+                Prim::IsFun => {
+                    *counter += 1;
+                    let fls_label = format!("false_{}", counter);
+                    let done_label = format!("cmp_done_{}", counter);
+                    vec![
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[0], vars))),
+                        Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
+                        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(TYPE_MASK))),
+                        Instr::Cmp(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(0b11))),
+                        Instr::Jne(JmpArg::Label(fls_label.clone())),
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_TRU))),
+                        Instr::Jmp(JmpArg::Label(done_label.clone())),
+                        Instr::Label(fls_label),
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(SNAKE_FLS))),
+                        Instr::Label(done_label),
+                    ]
+                }
                 Prim::IsArray => {
                     *counter += 1;
                     let fls_label = format!("false_{}", counter);
@@ -428,9 +444,53 @@ fn compile_to_instrs_inner<'a, 'b>(
                         Instr::Label(done_label),
                     ]
                 }
-                Prim::GetCode => todo!(),
-                Prim::GetEnv => todo!(),
-                Prim::CheckArityAndUntag(_) => todo!(),
+                Prim::GetCode => {
+                    vec![
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[0], vars))),
+                        Instr::Mov(MovArgs::ToReg(
+                            Reg::Rax,
+                            Arg64::Mem(MemRef {
+                                reg: Reg::Rax,
+                                offset: Offset::Constant(0),
+                            }),
+                        )),
+                    ]
+                }
+                Prim::GetEnv => {
+                    vec![
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[0], vars))),
+                        Instr::Mov(MovArgs::ToReg(
+                            Reg::Rax,
+                            Arg64::Mem(MemRef {
+                                reg: Reg::Rax,
+                                offset: Offset::Constant(8),
+                            }),
+                        )),
+                    ]
+                }
+                Prim::CheckArityAndUntag(arg_size) => {
+                    vec![
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exps[0], vars))),
+                        Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
+                        Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(TYPE_MASK))),
+                        Instr::Cmp(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(0b11))),
+                        Instr::Jne(JmpArg::Label(NON_CLOSURE_ERROR.to_string())),
+                        Instr::And(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(0b000))),
+                        // check arg size
+                        Instr::Mov(MovArgs::ToReg(
+                            Reg::R8,
+                            Arg64::Mem(MemRef {
+                                reg: Reg::Rax,
+                                offset: Offset::Constant(8),
+                            }),
+                        )),
+                        Instr::Cmp(BinArgs::ToReg(
+                            Reg::R8,
+                            Arg32::Unsigned((*arg_size).try_into().unwrap()),
+                        )),
+                        Instr::Jne(JmpArg::Label(LAMBDA_ARITY_ERROR.to_string())),
+                    ]
+                }
                 Prim::ArrayGet => {
                     let mut res = array_access(&exps[0], &exps[1], vars);
                     res.push(Instr::Mov(MovArgs::ToReg(

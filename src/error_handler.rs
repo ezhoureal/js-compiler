@@ -8,6 +8,8 @@ pub static LOGIC_ERROR: &str = "logic_error";
 pub static NON_ARRAY_ERROR: &str = "non_array_error";
 pub static INDEX_ERROR: &str = "index_not_number";
 pub static INDEX_OUT_OF_BOUNDS: &str = "index_out_of_bounds";
+pub static NON_CLOSURE_ERROR: &str = "non_closure_error";
+pub static LAMBDA_ARITY_ERROR: &str = "lambda_arity_error";
 pub static STACK_ERROR: &str = "stack_error";
 pub static SNAKE_ERROR: &str = "snake_error";
 
@@ -52,6 +54,14 @@ pub fn error_handle_instr() -> Vec<Instr> {
         Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
         Instr::Label(INDEX_OUT_OF_BOUNDS.to_string()),
         Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(7))),
+        Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::R8))),
+        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
+        Instr::Label(NON_CLOSURE_ERROR.to_string()),
+        Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(8))),
+        Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
+        Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
+        Instr::Label(LAMBDA_ARITY_ERROR.to_string()),
+        Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(9))),
         Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::R8))),
         Instr::Call(JmpArg::Label(SNAKE_ERROR.to_string())),
         Instr::Label(STACK_ERROR.to_string()),

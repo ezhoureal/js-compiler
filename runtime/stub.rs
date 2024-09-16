@@ -96,6 +96,8 @@ static LOGIC_TYPE_ERROR: ErrorCode = 4;
 static NON_ARRAY_ERROR: ErrorCode = 5;
 static INDEX_NOT_NUMBER: ErrorCode = 6;
 static INDEX_OUT_OF_BOUNDS: ErrorCode = 7;
+static NON_CLOSURE_ERROR: ErrorCode = 8;
+static LAMBDA_ARITY_ERROR: ErrorCode = 9;
 
 #[export_name = "\x01snake_error"]
 extern "sysv64" fn snake_error(err_code: ErrorCode, v: SnakeVal) {
@@ -115,6 +117,10 @@ extern "sysv64" fn snake_error(err_code: ErrorCode, v: SnakeVal) {
         eprintln!("index not a number: {}", sprint_snake_val(v));
     } else if err_code == INDEX_OUT_OF_BOUNDS {
         eprintln!("index out of bounds: {}", sprint_snake_val(v));
+    } else if err_code == NON_CLOSURE_ERROR {
+        eprintln!("called a non-function {}", sprint_snake_val(v));
+    } else if err_code == LAMBDA_ARITY_ERROR {
+        eprintln!("wrong number of arguments for lambda: {}", sprint_snake_val(v));
     } else if err_code == 99 {
         eprintln!("stack error: {:x}", v.0);
     } else {

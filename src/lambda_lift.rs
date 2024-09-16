@@ -202,12 +202,41 @@ fn rewrite_call_params(
             }
         }
         Exp::ClosureCall(func, args, _) => Exp::Let {
-            bindings: vec![("#lambda".to_string(), *func.clone())],
+            bindings: vec![
+                ("#lambda".to_string(), *func.clone()),
+                (
+                    "#untagged".to_string(),
+                    Exp::Prim(
+                        Prim::CheckArityAndUntag(args.len()),
+                        vec![Box::new(Exp::Var("#lambda".to_string(), ()))],
+                        (),
+                    ),
+                ),
+                (
+                    "#code_ptr".to_string(),
+                    Exp::Prim(
+                        Prim::GetCode,
+                        vec![Box::new(Exp::Var("#untagged".to_string(), ()))],
+                        (),
+                    ),
+                ),
+                (
+                    "#env".to_string(),
+                    Exp::Prim(
+                        Prim::GetEnv,
+                        vec![Box::new(Exp::Var("#untagged".to_string(), ()))],
+                        (),
+                    ),
+                ),
+            ],
             body: Box::new(Exp::ExternalCall {
-                fun: VarOrLabel::Var("#lambda".to_string()),
-                args: args
-                    .iter()
-                    .map(|arg| rewrite_call_params(arg, globals, false))
+                fun: VarOrLabel::Var("#code_ptr".to_string()),
+                args: vec![Exp::Var("#env".to_string(), ())]
+                    .into_iter()
+                    .chain(
+                        args.iter()
+                            .map(|arg| rewrite_call_params(arg, globals, false)),
+                    )
                     .collect(),
                 is_tail,
                 ann: (),
