@@ -538,11 +538,11 @@ fn compile_to_instrs_inner<'a, 'b>(
                         res.extend(vec![
                             Instr::Mov(MovArgs::ToReg(Reg::Rax, imm_to_arg64(&exp, vars))),
                             Instr::Mov(MovArgs::ToMem(
-                                MemRef {
-                                    reg: Reg::R15,
-                                    offset: Offset::Constant((8 * (i + 1)).try_into().unwrap()),
-                                },
-                                Reg32::Reg(Reg::Rax),
+                            MemRef {
+                                reg: Reg::R15,
+                                offset: Offset::Constant((8 * (i + 1)).try_into().unwrap()),
+                            },
+                            Reg32::Reg(Reg::Rax),
                             )),
                         ]);
                     }
@@ -697,7 +697,19 @@ fn compile_to_instrs_inner<'a, 'b>(
             label,
             env,
             ann,
-        } => todo!(),
+        } => {
+            vec![
+                Instr::RelativeLoadAddress(Reg::Rax, label.clone()),
+                Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::R15, offset: Offset::Constant(0) }, Reg32::Reg(Reg::Rax))),
+                Instr::Mov(MovArgs::ToReg(Reg::R8, Arg64::Unsigned(*arity as u64))),
+                Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::R15, offset: Offset::Constant(8) }, Reg32::Reg(Reg::R8))),
+                Instr::Mov(MovArgs::ToReg(Reg::R8, imm_to_arg64(&env, vars))),
+                Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::R15, offset: Offset::Constant(16) }, Reg32::Reg(Reg::R8))),
+                Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::R15))),
+                Instr::Add(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(0b11))),
+                Instr::Add(BinArgs::ToReg(Reg::R15, Arg32::Unsigned(24))),
+            ]
+        }
         SeqExp::Semicolon { e1, e2, ann } => todo!(),
     }
 }
@@ -817,6 +829,7 @@ where
     checker::check_prog(p, &HashSet::new())?;
     let (global_functions, main) = lambda_lift(&p);
     println!("global function size = {}", global_functions.len());
+    println!("main = {:?}", main);
     let program = sequentializer::seq_prog(&global_functions, &main);
 
     let mut counter: u32 = 0;

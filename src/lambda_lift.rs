@@ -231,7 +231,8 @@ fn rewrite_call_params(
             ],
             body: Box::new(Exp::ExternalCall {
                 fun: VarOrLabel::Var("#code_ptr".to_string()),
-                args: args.iter()
+                args: args
+                    .iter()
                     .map(|arg| rewrite_call_params(arg, globals, false))
                     .chain(std::iter::once(Exp::Var("#env".to_string(), ())))
                     .collect(),
@@ -271,6 +272,17 @@ fn lift_functions(
     need_lift: &HashSet<String>,
 ) -> Exp<()> {
     match e {
+        Exp::Var(v, _) => {
+            if globals.contains_key(v) {
+                return Exp::MakeClosure {
+                    arity: globals[v].parameters.len(),
+                    label: globals[v].name.clone(),
+                    env: Box::new(Exp::Prim(Prim::MakeArray, vec![], ())),
+                    ann: (),
+                };
+            }
+            return e.clone();
+        }
         Exp::Prim(p, exps, _) => {
             let mut new_exps = vec![];
             for exp in exps {
