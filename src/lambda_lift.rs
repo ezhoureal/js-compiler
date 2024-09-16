@@ -201,14 +201,19 @@ fn rewrite_call_params(
                 ann: (),
             }
         }
-        Exp::ClosureCall(func, params, _) => Exp::ClosureCall(
-            Box::new(rewrite_call_params(func, globals, false)),
-            params
-                .iter()
-                .map(|param| rewrite_call_params(param, globals, false))
-                .collect(),
-            (),
-        ),
+        Exp::ClosureCall(func, args, _) => Exp::Let {
+            bindings: vec![("#lambda".to_string(), *func.clone())],
+            body: Box::new(Exp::ExternalCall {
+                fun: VarOrLabel::Var("#lambda".to_string()),
+                args: args
+                    .iter()
+                    .map(|arg| rewrite_call_params(arg, globals, false))
+                    .collect(),
+                is_tail,
+                ann: (),
+            }),
+            ann: (),
+        },
         Exp::Lambda {
             parameters,
             body,
@@ -332,7 +337,7 @@ fn lift_functions(
                     Exp::Prim(
                         Prim::ArrayGet,
                         vec![
-                            Box::new(Exp::Var("env".to_string(), ())),
+                            Box::new(Exp::Var("#env".to_string(), ())),
                             Box::new(Exp::Num(i as i64, ())),
                         ],
                         (),
@@ -342,7 +347,7 @@ fn lift_functions(
             let decl = FunDecl {
                 // use globals.len() as counter
                 name: format!("lambda_{}", globals.len()),
-                parameters: [parameters.clone(), vec!["env".to_string()]].concat(),
+                parameters: [parameters.clone(), vec!["#env".to_string()]].concat(),
                 body: Exp::Let {
                     bindings: env_bindings,
                     body: Box::new(lift_functions(body, vars, globals, need_lift)),

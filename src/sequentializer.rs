@@ -125,7 +125,21 @@ fn sequentialize(e: &Exp<()>, counter: &mut u32) -> SeqExp<()> {
         }
         Exp::Semicolon { e1, e2, ann } => todo!(),
         Exp::Lambda { parameters, body, ann } => todo!(),
-        Exp::MakeClosure { arity, label, env, ann } => todo!(),
+        Exp::MakeClosure { arity, label, env, ann } => {
+            *counter += 1;
+            let var_name = format!("#env_{}", counter);
+            SeqExp::Let {
+                var: var_name.clone(),
+                bound_exp: Box::new(sequentialize(env, counter)),
+                body: Box::new(SeqExp::MakeClosure {
+                    arity: arity.clone(),
+                    label: label.clone(),
+                    env: ImmExp::Var(var_name),
+                    ann: (),
+                }),
+                ann: (),
+            }
+        }
         Exp::ClosureCall(_, _, _) => todo!(),
         Exp::DirectCall(_, _, _) => todo!(),
     }
