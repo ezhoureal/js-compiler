@@ -463,7 +463,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                             Reg::Rax,
                             Arg64::Mem(MemRef {
                                 reg: Reg::Rax,
-                                offset: Offset::Constant(8),
+                                offset: Offset::Constant(16),
                             }),
                         )),
                     ]
@@ -475,7 +475,7 @@ fn compile_to_instrs_inner<'a, 'b>(
                         Instr::And(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(TYPE_MASK))),
                         Instr::Cmp(BinArgs::ToReg(Reg::Rdx, Arg32::Unsigned(0b11))),
                         Instr::Jne(JmpArg::Label(NON_CLOSURE_ERROR.to_string())),
-                        Instr::And(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(0b000))),
+                        Instr::Xor(BinArgs::ToReg(Reg::Rax, Arg32::Unsigned(0b11))),
                         // check arg size
                         Instr::Mov(MovArgs::ToReg(
                             Reg::R8,
@@ -644,7 +644,9 @@ fn compile_to_instrs_inner<'a, 'b>(
         }
         SeqExp::InternalTailCall(func, args, _) => {
             assert!(functions.contains_key(func), "function {} not found", func);
-            return compile_tail_call(func.clone(), args, stack, functions[func], vars);
+            let mut res = compile_tail_call(args, stack, functions[func], vars);
+            res.push(Instr::Jmp(JmpArg::Label(format!("func_{}", func))));
+            res
         }
         SeqExp::ExternalCall {
             args,
@@ -655,16 +657,20 @@ fn compile_to_instrs_inner<'a, 'b>(
             if *is_tail {
                 match fun {
                     VarOrLabel::Label(fun_str) => {
-                        return compile_tail_call(fun_str.clone(), args, stack, 0, vars);
+                        let mut res = compile_tail_call(args, stack, 0, vars);
+                        res.push(Instr::Jmp(JmpArg::Label(format!("func_{}", fun_str))));
+                        return res;
                     }
                     VarOrLabel::Var(func) => {
-                        return vec![
+                        let mut res = compile_tail_call(args, stack, 0, vars);
+                        res.extend(vec![
                             Instr::Mov(MovArgs::ToReg(
                                 Reg::Rax,
                                 imm_to_arg64(&ImmExp::Var(func.to_string()), vars),
                             )),
                             Instr::Jmp(JmpArg::Reg(Reg::Rax)),
-                        ];
+                        ]);
+                        return res;
                     }
                 }
             }
@@ -717,7 +723,7 @@ fn compile_to_instrs_inner<'a, 'b>(
             ann,
         } => {
             vec![
-                Instr::RelativeLoadAddress(Reg::Rax, label.clone()),
+                Instr::RelativeLoadAddress(Reg::Rax, format!("func_{}", label)),
                 Instr::Mov(MovArgs::ToMem(
                     MemRef {
                         reg: Reg::R15,
@@ -751,7 +757,6 @@ fn compile_to_instrs_inner<'a, 'b>(
 }
 
 fn compile_tail_call(
-    func: String,
     args: &[ImmExp],
     stack: i32,
     decl_stack: i32, // stack size when the called function is declared
@@ -815,7 +820,6 @@ fn compile_tail_call(
             )));
         }
     }
-    res.push(Instr::Jmp(JmpArg::Label(format!("func_{}", func))));
     res
 }
 
