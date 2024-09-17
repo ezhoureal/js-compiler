@@ -47,20 +47,16 @@ fn sequentialize(e: &Exp<()>, counter: &mut u32) -> SeqExp<()> {
             body,
             ann: _,
         } => {
-            let mut optionRes: Option<SeqExp<()>> = None;
+            let mut res = sequentialize(body, counter);
             for (var, exp) in bindings.iter().rev() {
-                optionRes = Some(SeqExp::Let {
+                res = SeqExp::Let {
                     var: var.clone(),
                     bound_exp: Box::new(sequentialize(&exp, counter)),
-                    body: if optionRes.is_some() {
-                        Box::new(optionRes.unwrap())
-                    } else {
-                        Box::new(sequentialize(body, counter))
-                    },
+                    body: Box::new(res),
                     ann: (),
-                })
+                }
             }
-            optionRes.unwrap()
+            res
         }
         Exp::If {
             cond,
@@ -100,7 +96,7 @@ fn sequentialize(e: &Exp<()>, counter: &mut u32) -> SeqExp<()> {
         }
         Exp::Call(func, args, _) => {
             unimplemented!("called function = {:?}, arg size = {}", func, args.len())
-        },
+        }
         Exp::InternalTailCall(func, params, _) => {
             let (imm_params, let_bindings) = parse_param_exps(params, counter);
             generate_nested_let(
@@ -111,7 +107,9 @@ fn sequentialize(e: &Exp<()>, counter: &mut u32) -> SeqExp<()> {
         Exp::ExternalCall {
             args,
             is_tail,
-            ann, fun } => {
+            ann,
+            fun,
+        } => {
             let (imm_params, let_bindings) = parse_param_exps(args, counter);
             generate_nested_let(
                 &let_bindings,
@@ -124,8 +122,17 @@ fn sequentialize(e: &Exp<()>, counter: &mut u32) -> SeqExp<()> {
             )
         }
         Exp::Semicolon { e1, e2, ann } => todo!(),
-        Exp::Lambda { parameters, body, ann } => todo!(),
-        Exp::MakeClosure { arity, label, env, ann } => {
+        Exp::Lambda {
+            parameters,
+            body,
+            ann,
+        } => todo!(),
+        Exp::MakeClosure {
+            arity,
+            label,
+            env,
+            ann,
+        } => {
             *counter += 1;
             let var_name = format!("#env_{}", counter);
             SeqExp::Let {

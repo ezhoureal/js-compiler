@@ -115,7 +115,7 @@ fn uniquify<Span>(e: &Exp<Span>, mapping: &HashMap<String, String>, counter: &mu
                 scoped_mapping.insert(param.to_string(), format!("{}", counter));
             }
             Exp::Lambda {
-                parameters: parameters.clone(),
+                parameters: parameters.iter().map(|p| scoped_mapping[p].clone()).collect(),
                 body: Box::new(uniquify(&body, &scoped_mapping, counter)),
                 ann: (),
             }
@@ -300,8 +300,8 @@ fn lift_functions(
                 bindings: bindings
                     .iter()
                     .map(|bind| {
-                        scoped_vars.insert(bind.0.clone());
                         let new_bind = lift_functions(&bind.1, &scoped_vars, globals, need_lift);
+                        scoped_vars.insert(bind.0.clone());
                         (bind.0.clone(), new_bind)
                     })
                     .collect(),
